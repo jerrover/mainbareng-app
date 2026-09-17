@@ -12,6 +12,12 @@ mobile/android/app/build/
 mobile/android/build/
 mobile/android/local.properties
 
+# Secrets
+.env
+.env.local
+backend/.env
+mobile/.env
+
 # Local reports & academic drafts
 reports/
 *.pdf
