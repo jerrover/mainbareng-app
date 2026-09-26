@@ -1,0 +1,67 @@
+name: Mobile Preview APK Build (EAS)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target platform'
+        required: true
+        default: 'android'
+        type: choice
+        options:
+          - android
+          - all
+      profile:
+        description: 'EAS Build Profile (preview generates standalone APK)'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - development
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-mobile:
+    name: EAS Cloud Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./mobile
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Setup Expo & EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Trigger EAS Build
+        run: |
+          eas build --platform ${{ github.event.inputs.platform || 'android' }} \
+                    --profile ${{ github.event.inputs.profile || 'preview' }} \
+                    --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

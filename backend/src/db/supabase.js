@@ -1,7 +1,9 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
+const rawUrl = process.env.SUPABASE_URL || '';
+// Normalisasi URL jika user menyalin URL lengkap dengan path /rest/v1
+const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '');
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('your-project')) {
