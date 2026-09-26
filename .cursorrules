@@ -1,0 +1,8 @@
+# Cursor AI Rules for Mabar Repository
+# See AGENTS.md for full operational constraints.
+
+- NEVER push directly to `main` or `dev`.
+- Always create a scoped feature branch from `dev` (`feat/mobile-...`, `feat/backend-...`, `fix/...`).
+- Run backend verification (`npm test` in `./backend`) before committing.
+- Do NOT use hardcoded colors in React Native components; import `THEME` from `src/theme`.
+- Never commit `.env` or API credentials.
