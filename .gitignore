@@ -18,6 +18,10 @@ mobile/android/local.properties
 backend/.env
 mobile/.env
 
+# Coverage test artifacts
+coverage/
+backend/coverage/
+
 # Local reports & academic drafts
 reports/
 *.pdf
