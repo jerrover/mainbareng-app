@@ -11,6 +11,21 @@ const app = new Hono();
 // Global Middlewares
 app.use('*', cors());
 
+// Root Landing Endpoint
+app.get('/', (c) => {
+  return c.json({
+    status: 'ok',
+    service: 'mabar-backend',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      venues: '/api/venues',
+      sessions: '/api/sessions'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Health Check Endpoint
 app.get('/health', (c) => {
   return c.json({
