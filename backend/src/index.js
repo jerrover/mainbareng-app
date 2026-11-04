@@ -27,7 +27,7 @@ app.route('/api/venues', venueRouter);
 
 const port = Number(process.env.PORT) || 3001;
 
-if (process.env.NODE_ENV !== 'test') {
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   console.log(`[Mabar Backend] Server listening on http://localhost:${port}`);
   serve({
     fetch: app.fetch,

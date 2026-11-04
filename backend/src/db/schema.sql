@@ -171,6 +171,33 @@ CREATE TABLE IF NOT EXISTS public.user_blocks (
 );
 
 -- ==============================================================================
+-- 9. SOCIAL & FRIENDS NETWORK (FR-17)
+-- Stateful M:N relationship between users for friendship and lobby invites
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.friendships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    requester_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    addressee_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (requester_id != addressee_id),
+    UNIQUE (requester_id, addressee_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.session_invites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL REFERENCES public.sessions(id) ON DELETE CASCADE,
+    inviter_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    invitee_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (inviter_id != invitee_id),
+    UNIQUE (session_id, invitee_id)
+);
+
+-- ==============================================================================
 -- INDEXING FOR FOREIGN KEYS & DISCOVERY PERFORMANCE
 -- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_profiles_credit_score ON public.profiles(credit_score);
@@ -185,6 +212,11 @@ CREATE INDEX IF NOT EXISTS idx_peer_reviews_target_user_id ON public.peer_review
 CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id ON public.credit_transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_reports_reported_user_id ON public.user_reports(reported_user_id);
 CREATE INDEX IF NOT EXISTS idx_user_blocks_blocker_id ON public.user_blocks(blocker_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_requester_id ON public.friendships(requester_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_addressee_id ON public.friendships(addressee_id);
+CREATE INDEX IF NOT EXISTS idx_session_invites_session_id ON public.session_invites(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_invites_invitee_id ON public.session_invites(invitee_id);
+CREATE INDEX IF NOT EXISTS idx_session_invites_inviter_id ON public.session_invites(inviter_id);
 
 -- ==============================================================================
 -- ATOMIC LOCKING FUNCTION (MITIGATES RISK R-01 & SATISFIES FR-05, FR-06)
@@ -351,6 +383,8 @@ ALTER TABLE public.peer_reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_blocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.session_invites ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Public can read basic profile info; user can update own profile
 CREATE POLICY "Public profiles are viewable by everyone" 
@@ -401,4 +435,35 @@ CREATE POLICY "Users can submit reports"
     ON public.user_reports FOR INSERT WITH CHECK (auth.uid() = reporter_id);
 CREATE POLICY "Users can manage own block list" 
     ON public.user_blocks FOR ALL USING (auth.uid() = blocker_id);
+
+-- Friendships (FR-17): Users can view, send requests, accept/reject, or remove
+CREATE POLICY "Users can view own friendships" 
+    ON public.friendships FOR SELECT 
+    USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+
+CREATE POLICY "Users can send friend requests" 
+    ON public.friendships FOR INSERT 
+    WITH CHECK (auth.uid() = requester_id);
+
+CREATE POLICY "Addressee can update friendship status" 
+    ON public.friendships FOR UPDATE 
+    USING (auth.uid() = addressee_id);
+
+CREATE POLICY "Either user can remove friendship" 
+    ON public.friendships FOR DELETE 
+    USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+
+-- Session Invites (FR-17): Inviter and Invitee interaction
+CREATE POLICY "Users can view own session invites" 
+    ON public.session_invites FOR SELECT 
+    USING (auth.uid() = inviter_id OR auth.uid() = invitee_id);
+
+CREATE POLICY "Users can send session invites" 
+    ON public.session_invites FOR INSERT 
+    WITH CHECK (auth.uid() = inviter_id);
+
+CREATE POLICY "Invitee can respond to session invite" 
+    ON public.session_invites FOR UPDATE 
+    USING (auth.uid() = invitee_id);
+
 
