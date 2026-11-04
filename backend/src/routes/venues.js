@@ -8,6 +8,13 @@ venueRouter.get('/', async (c) => {
   const category = c.req.query('category');
 
   try {
+    if (!process.env.SUPABASE_URL || (!process.env.SUPABASE_ANON_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+      return c.json({
+        success: false,
+        error: 'Environment variables SUPABASE_URL / SUPABASE_ANON_KEY belum dikonfigurasi di Vercel Settings.'
+      }, 500);
+    }
+
     let query = supabase.from('venues').select('*').order('name');
     if (category) query = query.eq('category', category);
 
@@ -16,7 +23,7 @@ venueRouter.get('/', async (c) => {
 
     return c.json({ success: true, data });
   } catch (err) {
-    return c.json({ success: false, error: err.message }, 500);
+    return c.json({ success: false, error: err.message, cause: String(err.cause || '') }, 500);
   }
 });
 
