@@ -387,81 +387,105 @@ ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.session_invites ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Public can read basic profile info; user can update own profile
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "Public profiles are viewable by everyone" 
     ON public.profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" 
     ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- User Activity Profiles: Viewable by everyone; editable by owner
+DROP POLICY IF EXISTS "Activity profiles viewable by everyone" ON public.user_activity_profiles;
 CREATE POLICY "Activity profiles viewable by everyone" 
     ON public.user_activity_profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can insert own activity profile" ON public.user_activity_profiles;
 CREATE POLICY "Users can insert own activity profile" 
     ON public.user_activity_profiles FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own activity profile" ON public.user_activity_profiles;
 CREATE POLICY "Users can update own activity profile" 
     ON public.user_activity_profiles FOR UPDATE USING (auth.uid() = user_id);
 
 -- Venues: Viewable by all authenticated & anon users
+DROP POLICY IF EXISTS "Venues catalog is viewable by everyone" ON public.venues;
 CREATE POLICY "Venues catalog is viewable by everyone" 
     ON public.venues FOR SELECT USING (true);
 
 -- Sessions: Viewable by everyone; Host can create and update own session
+DROP POLICY IF EXISTS "Sessions are viewable by everyone" ON public.sessions;
 CREATE POLICY "Sessions are viewable by everyone" 
     ON public.sessions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Authenticated users can create sessions" ON public.sessions;
 CREATE POLICY "Authenticated users can create sessions" 
     ON public.sessions FOR INSERT WITH CHECK (auth.uid() = host_id);
+DROP POLICY IF EXISTS "Hosts can update own sessions" ON public.sessions;
 CREATE POLICY "Hosts can update own sessions" 
     ON public.sessions FOR UPDATE USING (auth.uid() = host_id);
 
 -- Session Participants: Viewable by everyone
+DROP POLICY IF EXISTS "Participants viewable by everyone" ON public.session_participants;
 CREATE POLICY "Participants viewable by everyone" 
     ON public.session_participants FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Participants can leave/cancel own slot" ON public.session_participants;
 CREATE POLICY "Participants can leave/cancel own slot" 
     ON public.session_participants FOR UPDATE USING (auth.uid() = user_id);
 
 -- Peer Reviews: Participants of the session can view and create reviews
+DROP POLICY IF EXISTS "Reviews viewable by session participants" ON public.peer_reviews;
 CREATE POLICY "Reviews viewable by session participants" 
     ON public.peer_reviews FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can submit reviews as reviewer" ON public.peer_reviews;
 CREATE POLICY "Users can submit reviews as reviewer" 
     ON public.peer_reviews FOR INSERT WITH CHECK (auth.uid() = reviewer_id);
 
 -- Credit Transactions: Users can only view their own credit audit history
+DROP POLICY IF EXISTS "Users view own credit ledger" ON public.credit_transactions;
 CREATE POLICY "Users view own credit ledger" 
     ON public.credit_transactions FOR SELECT USING (auth.uid() = user_id);
 
 -- User Reports & Blocks: Users can manage own reports and block list
+DROP POLICY IF EXISTS "Users can view own reports" ON public.user_reports;
 CREATE POLICY "Users can view own reports" 
     ON public.user_reports FOR SELECT USING (auth.uid() = reporter_id);
+DROP POLICY IF EXISTS "Users can submit reports" ON public.user_reports;
 CREATE POLICY "Users can submit reports" 
     ON public.user_reports FOR INSERT WITH CHECK (auth.uid() = reporter_id);
+DROP POLICY IF EXISTS "Users can manage own block list" ON public.user_blocks;
 CREATE POLICY "Users can manage own block list" 
     ON public.user_blocks FOR ALL USING (auth.uid() = blocker_id);
 
 -- Friendships (FR-17): Users can view, send requests, accept/reject, or remove
+DROP POLICY IF EXISTS "Users can view own friendships" ON public.friendships;
 CREATE POLICY "Users can view own friendships" 
     ON public.friendships FOR SELECT 
     USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
 
+DROP POLICY IF EXISTS "Users can send friend requests" ON public.friendships;
 CREATE POLICY "Users can send friend requests" 
     ON public.friendships FOR INSERT 
     WITH CHECK (auth.uid() = requester_id);
 
+DROP POLICY IF EXISTS "Addressee can update friendship status" ON public.friendships;
 CREATE POLICY "Addressee can update friendship status" 
     ON public.friendships FOR UPDATE 
     USING (auth.uid() = addressee_id);
 
+DROP POLICY IF EXISTS "Either user can remove friendship" ON public.friendships;
 CREATE POLICY "Either user can remove friendship" 
     ON public.friendships FOR DELETE 
     USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
 
 -- Session Invites (FR-17): Inviter and Invitee interaction
+DROP POLICY IF EXISTS "Users can view own session invites" ON public.session_invites;
 CREATE POLICY "Users can view own session invites" 
     ON public.session_invites FOR SELECT 
     USING (auth.uid() = inviter_id OR auth.uid() = invitee_id);
 
+DROP POLICY IF EXISTS "Users can send session invites" ON public.session_invites;
 CREATE POLICY "Users can send session invites" 
     ON public.session_invites FOR INSERT 
     WITH CHECK (auth.uid() = inviter_id);
 
+DROP POLICY IF EXISTS "Invitee can respond to session invite" ON public.session_invites;
 CREATE POLICY "Invitee can respond to session invite" 
     ON public.session_invites FOR UPDATE 
     USING (auth.uid() = invitee_id);
