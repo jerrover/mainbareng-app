@@ -2,7 +2,7 @@
   "name": "mabar-backend",
   "version": "1.0.0",
   "description": "Backend API Service for Mabar (MainBareng) Cross-Platform App",
-  "main": "src/index.js",
+  "main": "src/index.ts",
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",

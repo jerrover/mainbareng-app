@@ -1,4 +1,4 @@
-const { splitTeams } = require('../src/services/teamSplitter');
+import { splitTeams } from '../src/services/teamSplitter';
 
 describe('Balanced Team Splitter Service (FR-07)', () => {
   it('should return empty teams when no players provided', () => {

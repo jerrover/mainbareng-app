@@ -1,4 +1,4 @@
-const { KARMA_RULES, calculateKarmaAdjustment } = require('../src/services/karmaCalculator');
+import { calculateKarmaAdjustment, KarmaRuleType } from '../src/services/karmaCalculator';
 
 describe('Karma Score Calculator Service (FR-10)', () => {
   it('should increase score when user attends on time', () => {
@@ -29,6 +29,6 @@ describe('Karma Score Calculator Service (FR-10)', () => {
   });
 
   it('should throw error on invalid rule type', () => {
-    expect(() => calculateKarmaAdjustment(80, 'UNKNOWN_RULE')).toThrow('Invalid Karma rule type');
+    expect(() => calculateKarmaAdjustment(80, 'UNKNOWN_RULE' as KarmaRuleType)).toThrow('Invalid Karma rule type');
   });
 });

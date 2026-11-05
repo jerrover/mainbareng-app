@@ -1,4 +1,4 @@
-const app = require('../src/index').default || require('../src/index');
+import app from '../src/index';
 
 describe('Backend Baseline Integration Test', () => {
   it('should return health status ok', async () => {
