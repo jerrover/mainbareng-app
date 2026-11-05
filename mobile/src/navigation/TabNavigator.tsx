@@ -2,13 +2,14 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 import { THEME } from '../theme';
+import { MainTabParamList } from './types';
 
 import ExploreScreen from '../screens/ExploreScreen';
 import CreateSessionScreen from '../screens/CreateSessionScreen';
 import LobbyScreen from '../screens/LobbyScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function TabNavigator() {
   return (

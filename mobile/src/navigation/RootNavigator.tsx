@@ -1,11 +1,12 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
+import { RootStackParamList } from './types';
 
 import AuthScreen from '../screens/AuthScreen';
 import TabNavigator from './TabNavigator';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   return (

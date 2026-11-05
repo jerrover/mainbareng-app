@@ -1,8 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { CompositeScreenProps } from '@react-navigation/native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
+import { MainTabParamList, RootStackParamList } from '../navigation/types';
 
-export default function ProfileScreen({ navigation }) {
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Profile'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+export default function ProfileScreen({ navigation }: Props) {
   const profile = {
     name: 'Jeremy Marvel',
     role: 'Product Lead / Striker',

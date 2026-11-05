@@ -36,7 +36,7 @@ Before authoring any git commit, you MUST execute and pass local verifications:
    - Run tests: `npm test` (or `npx jest --coverage`). All tests MUST pass.
 2. **Mobile App Verification**:
    - Working directory: `./mobile`
-   - Syntax validation: `node -c App.js index.js src/theme.js`
+   - Syntax & type validation: `npm run typecheck`
    - Never introduce unverified dependencies without checking `mobile/package.json`.
 3. **No Secrets / Credential Leaks**:
    - NEVER commit `.env`, `.env.local`, or any service role keys.
