@@ -4,13 +4,34 @@
  * berdasarkan kombinasi Skill Rating (SR) dan Karma Score.
  */
 
-function splitTeams(players) {
+export interface PlayerInput {
+  id?: string;
+  name?: string;
+  skillRating?: number | string;
+  karmaScore?: number | string;
+  [key: string]: unknown;
+}
+
+export interface EnrichedPlayer extends PlayerInput {
+  effectivePower: number;
+  assignedTeam?: 'A' | 'B';
+}
+
+export interface SplitResult {
+  teamA: EnrichedPlayer[];
+  teamB: EnrichedPlayer[];
+  totalPowerA?: number;
+  totalPowerB?: number;
+  ratingDiff: number;
+}
+
+export function splitTeams(players: PlayerInput[]): SplitResult {
   if (!Array.isArray(players) || players.length === 0) {
     return { teamA: [], teamB: [], ratingDiff: 0 };
   }
 
   // 1. Hitung skor efektif tiap pemain: bobot SR 80% + bobot Karma 20%
-  const enriched = players.map((p) => {
+  const enriched: EnrichedPlayer[] = players.map((p) => {
     const sr = Number(p.skillRating || 1200);
     const karma = Number(p.karmaScore || 100);
     // Normalisasi: SR ~1000-2000, Karma 0-100 (dikalikan 15 agar skalanya seimbang)
@@ -21,8 +42,8 @@ function splitTeams(players) {
   // 2. Sort descending berdasarkan power
   enriched.sort((a, b) => b.effectivePower - a.effectivePower);
 
-  const teamA = [];
-  const teamB = [];
+  const teamA: EnrichedPlayer[] = [];
+  const teamB: EnrichedPlayer[] = [];
   let sumA = 0;
   let sumB = 0;
 
@@ -45,5 +66,3 @@ function splitTeams(players) {
     ratingDiff: Math.abs(Math.round(sumA - sumB))
   };
 }
-
-module.exports = { splitTeams };

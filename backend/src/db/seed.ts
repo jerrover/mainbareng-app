@@ -1,5 +1,7 @@
-require('dotenv').config();
-const { supabase } = require('./supabase');
+import dotenv from 'dotenv';
+import { supabase } from './supabase';
+
+dotenv.config();
 
 const VENUES_SEED = [
   {
@@ -86,7 +88,7 @@ async function seed() {
     }
 
     console.log('[Seed] Database seeding completed successfully! ✨');
-  } catch (err) {
+  } catch (err: any) {
     console.error('[Seed Error]:', err.message);
     process.exit(1);
   }
