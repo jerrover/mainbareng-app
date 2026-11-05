@@ -14,8 +14,9 @@ Aplikasi pencarian rekan main dan reservasi slot aktivitas olahraga (Sports) dan
 ---
 
 ## 🛠️ Tech Stack Baseline
-- **Mobile Client:** React Native (Expo Managed Workflow)
-- **Backend / API Service:** Node.js / Hono / Express Cloud Function
+- **Language:** TypeScript 100% (Strict mode across mobile & backend)
+- **Mobile Client:** React Native (Expo Managed Workflow SDK 57) + TypeScript (`.tsx`)
+- **Backend / API Service:** Node.js / Hono (TypeScript `.ts` + `tsx` runtime)
 - **Database & Auth:** Supabase PostgreSQL with Row Level Security (RLS) & Atomic Locking Function
 - **Reputation Engine:** Dual-axis reputation system (Credit Score & Activity Skill Rating)
 
