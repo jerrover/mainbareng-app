@@ -1,7 +1,7 @@
-const { Hono } = require('hono');
-const { supabase } = require('../db/supabase');
+import { Hono } from 'hono';
+import { supabase } from '../db/supabase';
 
-const sessionRouter = new Hono();
+export const sessionRouter = new Hono();
 
 // GET /api/sessions - Feed Play Now & Scheduled (FR-04)
 sessionRouter.get('/', async (c) => {
@@ -21,7 +21,7 @@ sessionRouter.get('/', async (c) => {
     if (error) throw error;
 
     return c.json({ success: true, data });
-  } catch (err) {
+  } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
 });
@@ -74,7 +74,7 @@ sessionRouter.post('/create', async (c) => {
     if (error) throw error;
 
     return c.json({ success: true, data });
-  } catch (err) {
+  } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
 });
@@ -98,9 +98,7 @@ sessionRouter.post('/join', async (c) => {
 
     const status = data?.success ? 200 : 400;
     return c.json(data, status);
-  } catch (err) {
+  } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
 });
-
-module.exports = { sessionRouter };

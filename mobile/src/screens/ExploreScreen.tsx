@@ -1,8 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
+import { MainTabParamList } from '../navigation/types';
 
-export default function ExploreScreen({ navigation }) {
+type Props = BottomTabScreenProps<MainTabParamList, 'Explore'>;
+
+export default function ExploreScreen({ navigation }: Props) {
   // Mock data session mabar
   const sessions = [
     {

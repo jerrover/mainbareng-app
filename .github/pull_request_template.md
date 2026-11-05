@@ -6,7 +6,7 @@
 - **Modul Terkait:** [ ] Backend / API  [ ] Mobile App  [ ] Database / RLS  [ ] Docs
 
 ### Checklist Definition of Done (DoD)
-- [ ] Kode bebas dari syntax error & lulus validasi lokal (`node -c` / `expo-doctor`)
+- [ ] Kode bebas dari syntax error & lulus typecheck lokal (`npm run typecheck` di backend & mobile)
 - [ ] Unit test lokal berjalan sukses (`npm test`)
 - [ ] Tidak ada hardcoded credentials / secret keys (`.env` tidak ikut ter-commit)
 - [ ] Mengikuti konvensi desain tema Langui Fusion (tanpa warna hex hardcoded di mobile)

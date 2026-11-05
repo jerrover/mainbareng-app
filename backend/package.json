@@ -2,17 +2,20 @@
   "name": "mabar-backend",
   "version": "1.0.0",
   "description": "Backend API Service for Mabar (MainBareng) Cross-Platform App",
-  "main": "src/index.js",
+  "main": "src/index.ts",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "seed": "node src/db/seed.js",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "seed": "tsx src/db/seed.ts",
+    "typecheck": "tsc --noEmit",
     "test": "jest --detectOpenHandles"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
     "@hono/node-server": "^2.1.1",
     "@supabase/supabase-js": "^2.116.0",
     "cors": "^2.8.6",
@@ -21,7 +24,13 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.6",
     "jest": "^30.5.1",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "ts-jest": "^29.4.15",
+    "tsx": "^4.23.15",
+    "typescript": "~5.7.3"
   }
 }

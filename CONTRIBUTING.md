@@ -41,8 +41,8 @@ git checkout -b feat/backend-session-api
 
 ### Langkah 2: Koding & Verifikasi Lokal
 Kerjakan kode di folder masing-masing (`mobile/` atau `backend/`). Sebelum commit, wajib jalankan verifikasi lokal:
-* **Backend**: `cd backend && npm test` (pastikan seluruh unit test lolos).
-* **Mobile**: `cd mobile && npx expo start` (pastikan tidak ada crash/syntax error).
+* **Backend**: `cd backend && npm run typecheck && npm test` (pastikan typecheck & seluruh unit test lolos).
+* **Mobile**: `cd mobile && npm run typecheck` (pastikan tidak ada type error dan kode bebas dari crash/syntax error).
 
 ### Langkah 3: Commit dengan Pesan Standar (Conventional Commits)
 Gunakan format pesan commit yang jelas:

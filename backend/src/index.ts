@@ -1,12 +1,14 @@
-require('dotenv').config();
-const { Hono } = require('hono');
-const { cors } = require('hono/cors');
-const { serve } = require('@hono/node-server');
+import dotenv from 'dotenv';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { serve } from '@hono/node-server';
 
-const { sessionRouter } = require('./routes/sessions');
-const { venueRouter } = require('./routes/venues');
+import { sessionRouter } from './routes/sessions';
+import { venueRouter } from './routes/venues';
 
-const app = new Hono();
+dotenv.config();
+
+export const app = new Hono();
 
 // Global Middlewares
 app.use('*', cors());
@@ -50,4 +52,4 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   });
 }
 
-module.exports = app;
+export default app;

@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
+import { MainTabParamList } from '../navigation/types';
 
-export default function CreateSessionScreen({ navigation }) {
+type Props = BottomTabScreenProps<MainTabParamList, 'Create'>;
+
+export default function CreateSessionScreen({ navigation }: Props) {
   const [step, setStep] = useState(1);
   const [activity, setActivity] = useState('Futsal');
   const [title, setTitle] = useState('');

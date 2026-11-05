@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
+import { MainTabParamList } from '../navigation/types';
 
-export default function LobbyScreen({ route, navigation }) {
+type Props = BottomTabScreenProps<MainTabParamList, 'Lobby'>;
+
+export default function LobbyScreen({ route, navigation }: Props) {
   const sessionTitle = route?.params?.sessionTitle || 'Futsal Santai 5v5 Malam Ini';
   const totalSlots = 10;
   

@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
+import { RootStackParamList } from '../navigation/types';
 
-export default function AuthScreen({ navigation }) {
+type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
+
+export default function AuthScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -12,7 +16,7 @@ export default function AuthScreen({ navigation }) {
       return;
     }
     // Dummy login success
-    navigation.replace('MainTabs');
+    navigation.replace('MainTabs', undefined);
   };
 
   return (
@@ -58,7 +62,7 @@ export default function AuthScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.btnGoogle}
-          onPress={() => navigation.replace('MainTabs')}
+          onPress={() => navigation.replace('MainTabs', undefined)}
         >
           <Text style={styles.btnGoogleText}>🌐 Masuk dengan Google SSO</Text>
         </TouchableOpacity>

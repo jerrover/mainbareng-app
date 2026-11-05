@@ -4,15 +4,29 @@
  * Threshold: 80 = Warning/Lock Host, 50 = Suspended.
  */
 
-const KARMA_RULES = {
+export const KARMA_RULES = {
   ATTEND_ON_TIME: 2,         // Hadir tepat waktu di lapangan
   COMMENDED_SPORTSMANSHIP: 5,// Mendapat bintang 5 & commend rekan tim
   LATE_ARRIVAL: -5,          // Datang terlambat > 15 menit
   NO_SHOW: -20,              // Mangkir tanpa pembatalan h-2 jam
   TOXIC_REPORT_VERIFIED: -25 // Laporan perilaku toxic diverifikasi admin
-};
+} as const;
 
-function calculateKarmaAdjustment(currentScore, ruleType) {
+export type KarmaRuleType = keyof typeof KARMA_RULES;
+
+export interface KarmaAdjustmentResult {
+  previousScore: number;
+  delta: number;
+  newScore: number;
+  isLockedFromHosting: boolean;
+  isSuspended: boolean;
+  statusLabel: 'EXCELLENT' | 'WARNING' | 'SUSPENDED';
+}
+
+export function calculateKarmaAdjustment(
+  currentScore: number | string,
+  ruleType: KarmaRuleType
+): KarmaAdjustmentResult {
   const current = Number(currentScore);
   const delta = KARMA_RULES[ruleType];
 
@@ -32,8 +46,3 @@ function calculateKarmaAdjustment(currentScore, ruleType) {
     statusLabel: nextScore > 80 ? 'EXCELLENT' : nextScore > 50 ? 'WARNING' : 'SUSPENDED'
   };
 }
-
-module.exports = {
-  KARMA_RULES,
-  calculateKarmaAdjustment
-};

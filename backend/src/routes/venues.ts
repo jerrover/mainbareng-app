@@ -1,7 +1,7 @@
-const { Hono } = require('hono');
-const { supabase } = require('../db/supabase');
+import { Hono } from 'hono';
+import { supabase } from '../db/supabase';
 
-const venueRouter = new Hono();
+export const venueRouter = new Hono();
 
 // GET /api/venues - List all verified venues
 venueRouter.get('/', async (c) => {
@@ -22,9 +22,7 @@ venueRouter.get('/', async (c) => {
     if (error) throw error;
 
     return c.json({ success: true, data });
-  } catch (err) {
+  } catch (err: any) {
     return c.json({ success: false, error: err.message, cause: String(err.cause || '') }, 500);
   }
 });
-
-module.exports = { venueRouter };

@@ -29,14 +29,17 @@ You are an autonomous AI engineering agent pairing inside this repository. You M
 
 ## 🛡️ 2. QUALITY ASSURANCE & VERIFICATION BEFORE COMMITTING
 
+The repository is 100% **TypeScript** across both `./backend` and `./mobile`. All code MUST be written in `.ts` or `.tsx` with strict type checking enabled.
+
 Before authoring any git commit, you MUST execute and pass local verifications:
 
 1. **Backend Verification**:
    - Working directory: `./backend`
+   - Typecheck: `npm run typecheck` (`tsc --noEmit`).
    - Run tests: `npm test` (or `npx jest --coverage`). All tests MUST pass.
 2. **Mobile App Verification**:
    - Working directory: `./mobile`
-   - Syntax validation: `node -c App.js index.js src/theme.js`
+   - Typecheck: `npm run typecheck` (`tsc --noEmit`).
    - Never introduce unverified dependencies without checking `mobile/package.json`.
 3. **No Secrets / Credential Leaks**:
    - NEVER commit `.env`, `.env.local`, or any service role keys.
