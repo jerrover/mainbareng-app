@@ -1,3 +1,75 @@
-# Expo HAS CHANGED
+# Mabar (MainBareng) — AI Coding Agent Operational Guidelines
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+You are an autonomous AI engineering agent pairing inside this repository. You MUST strictly adhere to the project conventions and team operational rules described below.
+
+---
+
+## 🚫 1. STRICT GIT & BRANCHING RULES (CRITICAL)
+
+1. **NEVER push directly to `main` or `dev`**:
+   - `main` is protected and reserved for evaluated production releases only.
+   - `dev` is the integration hub. Direct commits to `dev` are strictly forbidden for team developers and agents.
+2. **ALWAYS work in a scoped feature branch**:
+   - Always branch off the latest `origin/dev`:
+     ```bash
+     git checkout dev
+     git pull origin dev
+     git checkout -b <branch-name>
+     ```
+   - Standard branch naming convention:
+     - `feat/mobile-<feature-name>` for mobile application features
+     - `feat/backend-<feature-name>` for backend API & database features
+     - `fix/<scope>-<bug-description>` for bugfixes
+     - `docs/<description>` for documentation & milestone reports
+3. **Target branch for Pull Requests**:
+   - Every Pull Request MUST target `dev` as base, NEVER `main`.
+   - Use `.github/pull_request_template.md` checklist when authoring PR descriptions.
+
+---
+
+## 🛡️ 2. QUALITY ASSURANCE & VERIFICATION BEFORE COMMITTING
+
+The repository is 100% **TypeScript** across both `./backend` and `./mobile`. All code MUST be written in `.ts` or `.tsx` with strict type checking enabled.
+
+Before authoring any git commit, you MUST execute and pass local verifications:
+
+1. **Backend Verification**:
+   - Working directory: `./backend`
+   - Typecheck: `npm run typecheck` (`tsc --noEmit`).
+   - Run tests: `npm test` (or `npx jest --coverage`). All tests MUST pass.
+2. **Mobile App Verification**:
+   - Working directory: `./mobile`
+   - Typecheck: `npm run typecheck` (`tsc --noEmit`).
+   - Never introduce unverified dependencies without checking `mobile/package.json`.
+3. **No Secrets / Credential Leaks**:
+   - NEVER commit `.env`, `.env.local`, or any service role keys.
+   - Update `.env.example` if you introduce new environment variables.
+
+---
+
+## 🎨 3. MOBILE DESIGN SYSTEM CONVENTIONS (LANGUI FUSION)
+
+- **Official Design System Specs:** Refer to [mobile/DESIGN.md](./mobile/DESIGN.md) for full token scales (colors, typography, radius, spatial, and components).
+- **Figma Source of Truth Verification:** Every mobile UI/UX prompt, review, or implementation MUST strictly cross-verify with the official Figma suite (kB2Rxyg0JdTf9qABRR8uxZ, Page 1 Final) via Figma MCP or extracted specs. Never implement ad-hoc styles without grounding them in the Figma design system and THEME.
+- **NO HARDCODED COLOR CODES**:
+  - Always import `THEME` from `src/theme` (or `../theme`).
+  - Use semantic color tokens:
+    - Primary accent: `THEME.colors.primary` (`#D5FF40` Neon Volt)
+    - Dark background: `THEME.colors.background` (`#0A0B0E`)
+    - Surface / Cards: `THEME.colors.card`, `THEME.colors.cardElevated`, `THEME.colors.cardGlass`
+    - Borders: `THEME.colors.cardBorder`, `THEME.colors.borderGlass`
+    - Status: `THEME.colors.success`, `THEME.colors.warning`, `THEME.colors.danger`
+- Design aesthetic: **Bento Grid + Glassmorphism** (Langui Fusion), asymmetric corner radius, high contrast dark theme.
+
+---
+
+## 📦 4. COMMIT MESSAGE CONVENTIONS
+
+Follow **Conventional Commits**:
+- `feat(<scope>): <short imperative description>`
+- `fix(<scope>): <short imperative description>`
+- `docs(<scope>): <short imperative description>`
+- `ci: <pipeline change>`
+- `refactor(<scope>): <refactor description>`
+
+Do NOT bundle unrelated mobile and backend changes into a single mega-commit unless they form a tight API contract change. Keep commits atomic and modular.

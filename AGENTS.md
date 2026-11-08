@@ -49,7 +49,8 @@ Before authoring any git commit, you MUST execute and pass local verifications:
 
 ## 🎨 3. MOBILE DESIGN SYSTEM CONVENTIONS (LANGUI FUSION)
 
-When implementing React Native / Expo screens or components:
+- **Official Design System Specs:** Refer to [mobile/DESIGN.md](./mobile/DESIGN.md) for full token scales (colors, typography, radius, spatial, and components).
+- **Figma Source of Truth Verification:** Every mobile UI/UX prompt, review, or implementation MUST strictly cross-verify with the official Figma suite (kB2Rxyg0JdTf9qABRR8uxZ, Page 1 Final) via Figma MCP or extracted specs. Never implement ad-hoc styles without grounding them in the Figma design system and THEME.
 - **NO HARDCODED COLOR CODES**:
   - Always import `THEME` from `src/theme` (or `../theme`).
   - Use semantic color tokens:
