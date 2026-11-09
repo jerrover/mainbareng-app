@@ -39,14 +39,14 @@ app.get('/health', (c) => {
   });
 });
 
-// Email Confirmation Landing Page (Langui Fusion)
+// Email Confirmation Landing Page (Option C: Ultra-Minimal Direct)
 app.get('/auth/confirmed', (c) => {
   return c.html(`<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Email Berhasil Dikonfirmasi · Mabar</title>
+  <title>Email Terverifikasi · Mabar</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -59,78 +59,71 @@ app.get('/auth/confirmed', (c) => {
       justify-content: center;
       padding: 24px;
     }
-    .card {
-      background: #12141A;
-      border: 1px solid #1F2430;
-      border-radius: 16px;
-      max-width: 420px;
+    .container {
       width: 100%;
-      padding: 36px 28px;
+      max-width: 360px;
       text-align: center;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      padding: 20px 0;
     }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      background: rgba(213, 255, 64, 0.12);
-      border: 1px solid #D5FF40;
-      color: #D5FF40;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      margin-bottom: 24px;
-    }
-    .icon-box {
+    .check-orb {
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: rgba(16, 185, 129, 0.15);
-      border: 2px solid #10B981;
+      background: #12141A;
+      border: 1px solid #232938;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 20px;
-      color: #10B981;
-      font-size: 28px;
-      font-weight: bold;
+      margin: 0 auto 24px;
+      box-shadow: 0 0 35px rgba(213, 255, 64, 0.12);
+    }
+    .check-orb svg {
+      width: 28px;
+      height: 28px;
+      stroke: #D5FF40;
+      stroke-width: 2.5;
+      fill: none;
     }
     h1 {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 700;
       color: #FFFFFF;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      letter-spacing: -0.4px;
     }
     p {
       font-size: 13px;
       line-height: 1.6;
-      color: #94A3B8;
-      margin-bottom: 28px;
+      color: #7D8899;
+      margin-bottom: 32px;
     }
     .btn {
       display: block;
       width: 100%;
       padding: 14px 20px;
-      background-color: #D5FF40;
-      color: #0A0B0E;
-      font-weight: 700;
+      background: #151821;
+      border: 1px solid #2A3245;
+      color: #FFFFFF;
+      font-weight: 600;
       font-size: 13px;
       text-decoration: none;
-      border-radius: 8px;
-      transition: opacity 0.2s;
+      border-radius: 9999px;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
     }
     .btn:hover {
-      opacity: 0.9;
+      background: #1C2230;
+      border-color: #D5FF40;
+      color: #D5FF40;
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="badge">MABAR · UMN</div>
-    <div class="icon-box">✓</div>
-    <h1>Email Berhasil Dikonfirmasi</h1>
-    <p>Akun Mabar kamu sudah aktif dan siap digunakan. Silakan buka aplikasi Mabar di smartphone kamu untuk mulai mencari teman mabar.</p>
+  <div class="container">
+    <div class="check-orb">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <h1>Email Terverifikasi</h1>
+    <p>Pendaftaran selesai. Buka aplikasi Mabar di smartphone kamu untuk melanjutkan.</p>
     <a href="mabar://login" class="btn">Buka Aplikasi Mabar</a>
   </div>
 </body>
