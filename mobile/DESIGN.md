@@ -1,6 +1,6 @@
 # Langui Fusion — Mobile Design System & UI Tokens
 
-Dokumentasi spesifikasi desain resmi untuk aplikasi mobile **Mabar (MainBareng)**. Seluruh implementasi antarmuka wajib mengacu pada token dan aturan di bawah ini serta dicocokkan dengan **Figma Suite (kB2Rxyg0JdTf9qABRR8uxZ, Page 1 Final)**.
+Dokumentasi spesifikasi desain resmi untuk aplikasi mobile **Mabar (MainBareng)**. Seluruh implementasi antarmuka wajib mengacu pada token dan aturan di bawah ini serta dicocokkan dengan **Figma Suite (kB2Rxyg0JdTf9qABRR8uxZ, Mabar Master (Draft))**.
 
 ---
 
@@ -128,4 +128,4 @@ Dokumentasi spesifikasi desain resmi untuk aplikasi mobile **Mabar (MainBareng)*
 ## 🛡️ Aturan Coding untuk Developer & AI Agent
 1. **Dilarang keras menggunakan *hardcoded hex color*:** Seluruh warna wajib mengimpor `THEME.colors.*`.
 2. **Gunakan `THEME.radius.*` dan `THEME.spatial.*`:** Jangan memasang angka acak seperti `borderRadius: 13` atau `padding: 17`.
-3. **Setiap modifikasi UI wajib dicek silang ke Figma:** File key `kB2Rxyg0JdTf9qABRR8uxZ`, Page 1 Final.
+3. **Setiap modifikasi UI wajib dicek silang ke Figma:** File key `kB2Rxyg0JdTf9qABRR8uxZ`, Mabar Master (Draft).
