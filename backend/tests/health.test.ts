@@ -9,6 +9,16 @@ describe('Backend Baseline Integration Test', () => {
     expect(data.service).toBe('mabar-backend');
   });
 
+  it('should serve auth confirmed html landing page', async () => {
+    const res = await app.request('/auth/confirmed');
+    expect(res.status).toBe(200);
+    const contentType = res.headers.get('content-type');
+    expect(contentType).toContain('text/html');
+    const html = await res.text();
+    expect(html).toContain('Email Berhasil Dikonfirmasi');
+    expect(html).toContain('mabar://login');
+  });
+
   it('should validate missing session create payload', async () => {
     const res = await app.request('/api/sessions/create', {
       method: 'POST',
