@@ -123,12 +123,6 @@ app.get('/auth/confirmed', (c) => {
     .btn:hover {
       opacity: 0.9;
     }
-    .hint {
-      font-size: 11px;
-      color: #64748B;
-      margin-top: 14px;
-      line-height: 1.4;
-    }
   </style>
 </head>
 <body>
@@ -138,7 +132,6 @@ app.get('/auth/confirmed', (c) => {
     <h1>Email Berhasil Dikonfirmasi</h1>
     <p>Akun Mabar kamu sudah aktif dan siap digunakan. Silakan buka aplikasi Mabar di smartphone kamu untuk mulai mencari teman mabar.</p>
     <a href="mabar://login" class="btn">Buka Aplikasi Mabar</a>
-    <div class="hint">*Jika dibuka dari ponsel dengan aplikasi Mabar terpasang, tombol di atas akan langsung membukanya.</div>
   </div>
 </body>
 </html>`);
