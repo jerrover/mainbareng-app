@@ -11,6 +11,7 @@ import {
   ScrollView
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { THEME } from '../theme';
 import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../services/supabase';
@@ -19,8 +20,9 @@ import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
-export default function AuthScreen({ navigation }: Props) {
-  const [isSignUp, setIsSignUp] = useState(false);
+export default function AuthScreen({ route, navigation }: Props) {
+  const initialMode = route?.params?.initialMode;
+  const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
