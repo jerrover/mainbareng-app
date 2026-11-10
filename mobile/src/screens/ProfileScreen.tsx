@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
@@ -216,28 +217,30 @@ export default function ProfileScreen({ navigation }: Props) {
   // Guest Mode View
   if (!session || !user) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.topNav}>
-          <Text style={styles.navTitle}>Profil & Reputasi</Text>
-        </View>
-
-        <View style={styles.guestCard}>
-          <View style={[styles.avatarCircle, { borderColor: THEME.colors.cardBorder }]}>
-            <Text style={[styles.avatarText, { color: THEME.colors.textMuted }]}>?</Text>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <View style={styles.topNav}>
+            <Text style={styles.navTitle}>Profil & Reputasi</Text>
           </View>
-          <Text style={styles.profileName}>Mode Tamu</Text>
-          <Text style={styles.guestSubtitle}>
-            Masuk untuk melihat profil, rekam jejak kehadiran, dan reputasi Credit Score kamu.
-          </Text>
 
-          <TouchableOpacity
-            style={styles.btnLoginPrimary}
-            onPress={() => { const root = navigation.getParent<any>(); if (root) root.navigate('Auth'); else (navigation as any).navigate('Auth'); }}
-          >
-            <Text style={styles.btnLoginPrimaryText}>Masuk / Daftar Akun</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          <View style={styles.guestCard}>
+            <View style={[styles.avatarCircle, { borderColor: THEME.colors.cardBorder }]}>
+              <Text style={[styles.avatarText, { color: THEME.colors.textMuted }]}>?</Text>
+            </View>
+            <Text style={styles.profileName}>Mode Tamu</Text>
+            <Text style={styles.guestSubtitle}>
+              Masuk untuk melihat profil, rekam jejak kehadiran, dan reputasi Credit Score kamu.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.btnLoginPrimary}
+              onPress={() => { const root = navigation.getParent<any>(); if (root) root.navigate('Auth'); else (navigation as any).navigate('Auth'); }}
+            >
+              <Text style={styles.btnLoginPrimaryText}>Masuk / Daftar Akun</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
@@ -247,11 +250,12 @@ export default function ProfileScreen({ navigation }: Props) {
   const showUpRate = profileData?.showUpRate ?? '100%';
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Top Nav Bar (SCR-16) */}
       <View style={styles.topNav}>
         <TouchableOpacity
@@ -393,12 +397,17 @@ export default function ProfileScreen({ navigation }: Props) {
         secondaryButtonText={modalConfig.secondaryButtonText}
         onSecondaryPress={modalConfig.onSecondaryPress}
         onClose={() => setModalConfig((prev) => ({ ...prev, visible: false }))}
-      />
-    </ScrollView>
+        />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: THEME.colors.background
+  },
   container: {
     flex: 1,
     backgroundColor: THEME.colors.background
@@ -406,7 +415,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 40
+    paddingBottom: 120
   },
   topNav: {
     height: 52,

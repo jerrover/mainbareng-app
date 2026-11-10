@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
     paddingTop: 8,
-    paddingBottom: 96 // Space for floating capsule nav
+    paddingBottom: 120 // Space for floating capsule nav
   },
 
   // Top App Bar (Figma 31:20)

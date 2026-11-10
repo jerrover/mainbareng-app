@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
     paddingTop: 8,
-    paddingBottom: 96
+    paddingBottom: 120
   },
 
   // Top App Bar (Figma SCR-10 191:13)
