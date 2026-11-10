@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
     paddingTop: 8,
-    paddingBottom: 96
+    paddingBottom: 120
   },
 
   // Wizard Top Bar (Figma SCR-07 194:5)

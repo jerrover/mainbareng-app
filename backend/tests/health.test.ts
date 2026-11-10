@@ -15,7 +15,7 @@ describe('Backend Baseline Integration Test', () => {
     const contentType = res.headers.get('content-type');
     expect(contentType).toContain('text/html');
     const html = await res.text();
-    expect(html).toContain('Email Berhasil Dikonfirmasi');
+    expect(html).toContain('Email Terverifikasi');
     expect(html).toContain('mabar://login');
   });
 
