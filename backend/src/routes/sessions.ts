@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { supabase } from '../db/supabase';
 import { splitTeams, PlayerInput } from '../services/teamSplitter';
+import { BalancedTeamResult, ParticipantRecord } from '../types/sessions';
 
 export const sessionRouter = new Hono();
 
@@ -214,7 +215,7 @@ sessionRouter.post('/:id/teams/split', async (c) => {
     }
 
     // 7. Format output sesuai spesifikasi BalancedTeamResult
-    const mapMember = (p: any, assignedTeam: 'Team A' | 'Team B') => ({
+    const mapMember = (p: any, assignedTeam: 'Team A' | 'Team B'): ParticipantRecord => ({
       id: p.participantId,
       session_id: sessionId,
       user_id: p.id,
@@ -229,8 +230,8 @@ sessionRouter.post('/:id/teams/split', async (c) => {
       credit_score: p.creditScore
     });
 
-    const membersA = splitResult.teamA.map((p: any) => mapMember(p, 'Team A'));
-    const membersB = splitResult.teamB.map((p: any) => mapMember(p, 'Team B'));
+    const membersA: ParticipantRecord[] = splitResult.teamA.map((p: any) => mapMember(p, 'Team A'));
+    const membersB: ParticipantRecord[] = splitResult.teamB.map((p: any) => mapMember(p, 'Team B'));
 
     const totalSkillA = membersA.reduce((sum, m) => sum + m.skill_rating_points, 0);
     const totalSkillB = membersB.reduce((sum, m) => sum + m.skill_rating_points, 0);
@@ -240,7 +241,7 @@ sessionRouter.post('/:id/teams/split', async (c) => {
     const maxAvg = Math.max(avgSkillA, avgSkillB);
     const diffPercent = maxAvg > 0 ? Number(((Math.abs(avgSkillA - avgSkillB) / maxAvg) * 100).toFixed(2)) : 0;
 
-    const data = {
+    const data: BalancedTeamResult = {
       session_id: sessionId,
       team_a: {
         name: 'Team A',
