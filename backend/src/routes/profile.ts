@@ -7,7 +7,7 @@ export const profileRouter = new Hono<{ Variables: AuthVariables }>();
 // Apply auth middleware to all profile routes
 profileRouter.use('*', authMiddleware);
 
-// GET /api/profile/me - Get current user's profile and karma status (FR-01, FR-02)
+// GET /api/profile/me - Get current user's profile and credit score status (FR-01, FR-02)
 profileRouter.get('/me', async (c) => {
   const user = c.get('user');
 
