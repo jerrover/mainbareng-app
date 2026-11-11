@@ -1,7 +1,22 @@
 import { Hono } from 'hono';
 import { supabase } from '../db/supabase';
 import { splitTeams, PlayerInput } from '../services/teamSplitter';
-import { BalancedTeamResult, ParticipantRecord } from '../types/sessions';
+import {
+  buildReviewRuleEntries,
+  computeReputationSessionMetrics,
+  SessionParticipationMetricRow
+} from '../services/peerReviewCalculator';
+import {
+  ALLOWED_SESSION_STATUS_TRANSITIONS,
+  BalancedTeamResult,
+  ParticipantRecord,
+  ReviewTargetItem,
+  SessionLifecycleStatus,
+  reviewTargetsQuerySchema,
+  sessionUuidParamSchema,
+  submitPeerReviewsSchema,
+  updateSessionStatusSchema
+} from '../types/sessions';
 
 export const sessionRouter = new Hono();
 
@@ -259,6 +274,359 @@ sessionRouter.post('/:id/teams/split', async (c) => {
     };
 
     return c.json({ success: true, data }, 200);
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+function mapPeerReviewRpcErrorStatus(code?: string): 400 | 403 | 404 | 409 {
+  switch (code) {
+    case 'SESSION_NOT_FOUND':
+      return 404;
+    case 'NOT_PARTICIPANT':
+      return 403;
+    case 'DUPLICATE_REVIEW':
+      return 409;
+    default:
+      return 400;
+  }
+}
+
+async function recalculateParticipantsMetricsForSession(sessionId: string): Promise<void> {
+  const { data: sessionParticipants, error: spErr } = await supabase
+    .from('session_participants')
+    .select('user_id')
+    .eq('session_id', sessionId)
+    .neq('attendance_status', 'CANCELLED');
+
+  if (spErr) throw spErr;
+
+  const userIds = Array.from(
+    new Set((sessionParticipants || []).map((row: any) => row.user_id).filter(Boolean))
+  ) as string[];
+
+  if (userIds.length === 0) return;
+
+  const { data: completedParticipations, error: metricsErr } = await supabase
+    .from('session_participants')
+    .select('user_id, session_id, attendance_status, sessions!inner(status)')
+    .in('user_id', userIds)
+    .neq('attendance_status', 'CANCELLED')
+    .eq('sessions.status', 'COMPLETED');
+
+  if (metricsErr) throw metricsErr;
+
+  const rowsByUser = new Map<string, SessionParticipationMetricRow[]>();
+  for (const uid of userIds) {
+    rowsByUser.set(uid, []);
+  }
+  for (const row of completedParticipations || []) {
+    const bucket = rowsByUser.get((row as any).user_id);
+    if (bucket) {
+      bucket.push({
+        session_id: (row as any).session_id,
+        attendance_status: (row as any).attendance_status
+      });
+    }
+  }
+
+  const groupedByMetrics = new Map<
+    string,
+    { total: number; showUpRate: number; userIds: string[] }
+  >();
+
+  for (const [uid, rows] of rowsByUser.entries()) {
+    const metrics = computeReputationSessionMetrics(rows);
+    const key = `${metrics.total_sessions_completed}:${metrics.show_up_rate}`;
+    const existing = groupedByMetrics.get(key);
+    if (existing) {
+      existing.userIds.push(uid);
+    } else {
+      groupedByMetrics.set(key, {
+        total: metrics.total_sessions_completed,
+        showUpRate: metrics.show_up_rate,
+        userIds: [uid]
+      });
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  for (const group of groupedByMetrics.values()) {
+    const { error: updateErr } = await supabase
+      .from('profiles')
+      .update({
+        total_sessions_completed: group.total,
+        show_up_rate: group.showUpRate,
+        updated_at: nowIso
+      })
+      .in('id', group.userIds);
+
+    if (updateErr) throw updateErr;
+  }
+}
+
+// GET /api/sessions/:id/review-targets?reviewer_id=... - Daftar target review pasca-sesi (FR-09)
+sessionRouter.get('/:id/review-targets', async (c) => {
+  const paramParse = sessionUuidParamSchema.safeParse({ id: c.req.param('id') });
+  if (!paramParse.success) {
+    return c.json({ success: false, error: paramParse.error.issues[0]?.message || 'Invalid session id' }, 400);
+  }
+
+  const queryParse = reviewTargetsQuerySchema.safeParse({ reviewer_id: c.req.query('reviewer_id') });
+  if (!queryParse.success) {
+    return c.json({ success: false, error: queryParse.error.issues[0]?.message || 'Query reviewer_id wajib valid UUID' }, 400);
+  }
+
+  const sessionId = paramParse.data.id;
+  const reviewerId = queryParse.data.reviewer_id;
+
+  try {
+    const { data: session, error: sessionErr } = await supabase
+      .from('sessions')
+      .select('id, status')
+      .eq('id', sessionId)
+      .maybeSingle();
+
+    if (sessionErr) {
+      return c.json({ success: false, error: sessionErr.message }, 500);
+    }
+
+    if (!session) {
+      return c.json({ success: false, error: 'Sesi tidak ditemukan.' }, 404);
+    }
+
+    if (session.status !== 'COMPLETED') {
+      return c.json(
+        {
+          success: false,
+          error: 'Daftar target review hanya tersedia untuk sesi berstatus COMPLETED.'
+        },
+        400
+      );
+    }
+
+    const { data: participants, error: partErr } = await supabase
+      .from('session_participants')
+      .select('id, user_id, assigned_team, attendance_status, profiles:user_id(id, full_name)')
+      .eq('session_id', sessionId)
+      .neq('attendance_status', 'CANCELLED')
+      .order('slot_number', { ascending: true });
+
+    if (partErr) {
+      return c.json({ success: false, error: partErr.message }, 500);
+    }
+
+    const activeParticipants = participants || [];
+    const isReviewerParticipant = activeParticipants.some((p: any) => p.user_id === reviewerId);
+
+    if (!isReviewerParticipant) {
+      return c.json(
+        {
+          success: false,
+          error: 'Reviewer bukan peserta aktif pada sesi ini.'
+        },
+        403
+      );
+    }
+
+    const targets: ReviewTargetItem[] = activeParticipants
+      .filter((p: any) => p.user_id !== reviewerId)
+      .map((p: any) => {
+        const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
+        return {
+          participant_id: p.id,
+          display_name: profile?.full_name || 'Peserta Mabar',
+          is_guest: false,
+          assigned_team: p.assigned_team ?? null
+        };
+      });
+
+    return c.json({ success: true, data: targets }, 200);
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// POST /api/sessions/:id/reviews - Submit batch peer reviews & mutasi Credit Score atomik (FR-09, FR-10)
+sessionRouter.post('/:id/reviews', async (c) => {
+  const paramParse = sessionUuidParamSchema.safeParse({ id: c.req.param('id') });
+  if (!paramParse.success) {
+    return c.json({ success: false, error: paramParse.error.issues[0]?.message || 'Invalid session id' }, 400);
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Payload JSON tidak valid.' }, 400);
+  }
+
+  const bodyParse = submitPeerReviewsSchema.safeParse(rawBody);
+  if (!bodyParse.success) {
+    return c.json(
+      {
+        success: false,
+        error: bodyParse.error.issues[0]?.message || 'Payload peer review tidak valid.'
+      },
+      400
+    );
+  }
+
+  const sessionId = paramParse.data.id;
+  const { reviewer_id, reviews } = bodyParse.data;
+
+  // Pastikan setiap item non-guest sesuai rule mapping KARMA_RULES
+  for (const item of reviews) {
+    if (!item.is_guest) {
+      buildReviewRuleEntries(item.attendance, item.sportsmanship);
+    }
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('submit_peer_reviews_atomic', {
+      p_session_id: sessionId,
+      p_reviewer_id: reviewer_id,
+      p_reviews: reviews
+    });
+
+    if (error) {
+      if ((error as any).code === '23505') {
+        return c.json(
+          {
+            success: false,
+            error: 'Review duplikat: Anda sudah pernah menilai peserta ini pada sesi yang sama.'
+          },
+          409
+        );
+      }
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    if (!data || data.ok === false) {
+      const status = mapPeerReviewRpcErrorStatus(data?.code);
+      return c.json(
+        {
+          success: false,
+          error: data?.message || 'Gagal menyimpan peer review.'
+        },
+        status
+      );
+    }
+
+    return c.json(
+      {
+        success: true,
+        data: {
+          session_id: data.session_id,
+          reviewer_id: data.reviewer_id,
+          submitted_count: data.submitted_count,
+          skipped_guests: data.skipped_guests ?? [],
+          results: data.results ?? []
+        }
+      },
+      201
+    );
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// PATCH /api/sessions/:id/status - Update status sesi oleh host + hitung ulang metrik saat COMPLETED
+sessionRouter.patch('/:id/status', async (c) => {
+  const paramParse = sessionUuidParamSchema.safeParse({ id: c.req.param('id') });
+  if (!paramParse.success) {
+    return c.json({ success: false, error: paramParse.error.issues[0]?.message || 'Invalid session id' }, 400);
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Payload JSON tidak valid.' }, 400);
+  }
+
+  const bodyParse = updateSessionStatusSchema.safeParse(rawBody);
+  if (!bodyParse.success) {
+    return c.json(
+      {
+        success: false,
+        error: bodyParse.error.issues[0]?.message || 'Payload status sesi tidak valid.'
+      },
+      400
+    );
+  }
+
+  const sessionId = paramParse.data.id;
+  const { host_id, status: nextStatus } = bodyParse.data;
+
+  try {
+    const { data: session, error: sessionErr } = await supabase
+      .from('sessions')
+      .select('id, host_id, status')
+      .eq('id', sessionId)
+      .maybeSingle();
+
+    if (sessionErr) {
+      return c.json({ success: false, error: sessionErr.message }, 500);
+    }
+
+    if (!session) {
+      return c.json({ success: false, error: 'Sesi tidak ditemukan.' }, 404);
+    }
+
+    if (session.host_id !== host_id) {
+      return c.json(
+        {
+          success: false,
+          error: 'Hanya host pemilik sesi yang berhak mengubah status sesi.'
+        },
+        403
+      );
+    }
+
+    const currentStatus = session.status as SessionLifecycleStatus;
+    const allowedNext = ALLOWED_SESSION_STATUS_TRANSITIONS[currentStatus] || [];
+
+    if (!allowedNext.includes(nextStatus)) {
+      return c.json(
+        {
+          success: false,
+          error: `Transisi status dari ${currentStatus} ke ${nextStatus} tidak diizinkan.`
+        },
+        400
+      );
+    }
+
+    const { data: updatedSession, error: updateErr } = await supabase
+      .from('sessions')
+      .update({
+        status: nextStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId)
+      .eq('status', currentStatus)
+      .select()
+      .maybeSingle();
+
+    if (updateErr) {
+      return c.json({ success: false, error: updateErr.message }, 500);
+    }
+
+    if (!updatedSession) {
+      return c.json(
+        {
+          success: false,
+          error: 'Status sesi berubah secara bersamaan. Silakan muat ulang dan coba lagi.'
+        },
+        409
+      );
+    }
+
+    if (nextStatus === 'COMPLETED') {
+      await recalculateParticipantsMetricsForSession(sessionId);
+    }
+
+    return c.json({ success: true, data: updatedSession }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
