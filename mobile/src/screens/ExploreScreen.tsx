@@ -1,39 +1,82 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput
+  TextInput,
+  ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
+import { api, ApiSession } from '../services/api';
+import { useAuthStore } from '../store/authStore';
+import { QuotaPips, StatusBadge } from '../components';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'Explore'>;
 
-interface SessionItem {
-  id: string;
-  title: string;
-  activity: string;
-  activityIcon: string;
-  venue: string;
-  time: string;
-  dayLabel: string;
-  totalSlots: number;
-  filledSlots: number;
-  minKarma: number;
-  costPerSlot: string;
-  hostName: string;
-  hostKarma: number;
-  isUrgent?: boolean;
+function getActivityIcon(activityType: string = ''): string {
+  const act = activityType.toLowerCase();
+  if (act.includes('futsal') || act.includes('soccer') || act.includes('sepak')) return '⚽';
+  if (act.includes('badminton') || act.includes('bulutangkis')) return '🏸';
+  if (act.includes('basket')) return '🏀';
+  if (act.includes('mlbb') || act.includes('game') || act.includes('esport')) return '🎮';
+  return '⚡';
+}
+
+function formatKickoff(isoDateStr: string): { time: string; dayLabel: string } {
+  try {
+    const d = new Date(isoDateStr);
+    if (isNaN(d.getTime())) return { time: '--:--', dayLabel: 'TBD' };
+
+    const hours = d.getHours().toString().padStart(2, '0');
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    const time = `${hours}:${minutes}`;
+
+    const now = new Date();
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrow =
+      d.getDate() === tomorrow.getDate() &&
+      d.getMonth() === tomorrow.getMonth() &&
+      d.getFullYear() === tomorrow.getFullYear();
+
+    let dayLabel = `${d.getDate()} ${d.toLocaleString('id-ID', { month: 'short' })}`;
+    if (isToday) dayLabel = 'Hari Ini';
+    else if (isTomorrow) dayLabel = 'Besok';
+
+    return { time, dayLabel };
+  } catch {
+    return { time: '--:--', dayLabel: 'TBD' };
+  }
+}
+
+function formatCost(totalCost: number, maxSlots: number): { amount: string; isFree: boolean } {
+  if (!totalCost || totalCost <= 0) {
+    return { amount: 'Gratis', isFree: true };
+  }
+  const perPerson = Math.round(totalCost / Math.max(1, maxSlots));
+  return { amount: `Rp ${perPerson.toLocaleString('id-ID')}`, isFree: false };
 }
 
 export default function ExploreScreen({ navigation }: Props) {
+  const { user } = useAuthStore();
+  const [sessions, setSessions] = useState<ApiSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [selectedCategory, setSelectedCategory] = useState('Semua');
-  const [scheduleTab, setScheduleTab] = useState<'now' | 'scheduled'>('now');
+  const [scheduleTab, setScheduleTab] = useState<'now' | 'scheduled'>('scheduled');
   const [searchQuery, setSearchQuery] = useState('');
 
   const categories = [
@@ -44,83 +87,69 @@ export default function ExploreScreen({ navigation }: Props) {
     { id: 'MLBB', label: '🎮 MLBB' }
   ];
 
-  const sessions: SessionItem[] = [
-    {
-      id: 'ses-1',
-      title: 'Futsal Malam Santai 5v5 Serpong',
-      activity: 'FUTSAL 5v5',
-      activityIcon: '⚽',
-      venue: 'Tifosi Sport Center · Vinyl',
-      time: '19:00',
-      dayLabel: 'Hari Ini',
-      totalSlots: 10,
-      filledSlots: 8,
-      minKarma: 70,
-      costPerSlot: 'Rp 30.000',
-      hostName: 'Jeremy',
-      hostKarma: 98,
-      isUrgent: true
-    },
-    {
-      id: 'ses-2',
-      title: 'Badminton Ganda Men Intermediate',
-      activity: 'BADMINTON GANDA',
-      activityIcon: '🏸',
-      venue: 'Champion Court Gading Serpong',
-      time: '20:30',
-      dayLabel: 'Hari Ini',
-      totalSlots: 4,
-      filledSlots: 3,
-      minKarma: 80,
-      costPerSlot: 'Rp 25.000',
-      hostName: 'Ben_Mobile',
-      hostKarma: 92,
-      isUrgent: true
-    },
-    {
-      id: 'ses-3',
-      title: 'MLBB Mythic Push Party Full Squad',
-      activity: 'ESPORTS 5-MAN',
-      activityIcon: '🎮',
-      venue: 'Discord Voice Channel 01',
-      time: '21:00',
-      dayLabel: 'Hari Ini',
-      totalSlots: 5,
-      filledSlots: 4,
-      minKarma: 85,
-      costPerSlot: 'Gratis',
-      hostName: 'Hyun_Striker',
-      hostKarma: 88,
-      isUrgent: true
-    },
-    {
-      id: 'ses-4',
-      title: 'Futsal Akhir Pekan Friendly Match',
-      activity: 'FUTSAL 5v5',
-      activityIcon: '⚽',
-      venue: 'Tifosi Sport Center · Rumput',
-      time: '08:00',
-      dayLabel: 'Sabtu Besok',
-      totalSlots: 10,
-      filledSlots: 6,
-      minKarma: 75,
-      costPerSlot: 'Rp 35.000',
-      hostName: 'Jerikho',
-      hostKarma: 90,
-      isUrgent: false
+  const loadSessions = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const data = await api.getSessions();
+      setSessions(data);
+    } catch (err: any) {
+      console.warn('[ExploreScreen] Error fetching sessions:', err.message);
+      setError(err.message || 'Gagal memuat sesi mabar');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  ];
+  }, []);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
+
+  // Derived user details
+  const userName =
+    user?.user_metadata?.full_name ||
+    (user?.email ? user.email.split('@')[0] : 'Sobat Mabar');
+  const userInitials = userName
+    .split(' ')
+    .map((w: string) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'JM';
+  const userKarma = user?.user_metadata?.credit_score ?? 100;
+
+  // Counts for tabs
+  const playNowCount = sessions.filter((s) => s.session_mode === 'play_now').length;
+  const scheduledCount = sessions.filter((s) => s.session_mode !== 'play_now').length;
 
   // Filtering
   const filteredSessions = sessions.filter((s) => {
+    const act = (s.activity_type || '').toLowerCase();
+    const cat = (s.session_category || '').toLowerCase();
+
     const matchesCat =
       selectedCategory === 'Semua' ||
-      s.activity.toLowerCase().includes(selectedCategory.toLowerCase());
+      (selectedCategory === 'Futsal' && act.includes('futsal')) ||
+      (selectedCategory === 'Badminton' && act.includes('badminton')) ||
+      (selectedCategory === 'Basket' && act.includes('basket')) ||
+      (selectedCategory === 'MLBB' && (act.includes('mlbb') || cat.includes('esport')));
+
+    const titleStr = (s.title || '').toLowerCase();
+    const venueStr = (s.venues?.name || s.custom_location || '').toLowerCase();
+    const hostStr = (s.profiles?.full_name || '').toLowerCase();
+    const queryStr = searchQuery.toLowerCase();
+
     const matchesSearch =
-      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.venue.toLowerCase().includes(searchQuery.toLowerCase());
+      !searchQuery ||
+      titleStr.includes(queryStr) ||
+      venueStr.includes(queryStr) ||
+      hostStr.includes(queryStr);
+
     const matchesSchedule =
-      scheduleTab === 'now' ? s.isUrgent : !s.isUrgent;
+      scheduleTab === 'now' ? s.session_mode === 'play_now' : s.session_mode !== 'play_now';
+
     return matchesCat && matchesSearch && matchesSchedule;
   });
 
@@ -130,20 +159,30 @@ export default function ExploreScreen({ navigation }: Props) {
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadSessions(true)}
+            tintColor={THEME.colors.primary}
+            colors={[THEME.colors.primary]}
+          />
+        }
       >
         {/* Top App Bar (Figma 31:20) */}
         <View style={styles.topAppBar}>
           <View style={styles.userInfo}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>JM</Text>
+              <Text style={styles.avatarText}>{userInitials}</Text>
             </View>
             <View>
-              <Text style={styles.greetingText}>Halo, Jeremy</Text>
-              <Text style={styles.karmaText}>🛡️ Karma: 98 (Prima)</Text>
+              <Text style={styles.greetingText}>Halo, {userName}</Text>
+              <Text style={styles.karmaText}>
+                🛡️ Karma: {userKarma} ({userKarma >= 80 ? 'Prima' : 'Standar'})
+              </Text>
             </View>
           </View>
           <View style={styles.creditBadge}>
-            <Text style={styles.creditBadgeText}>⚡ 100 Prima</Text>
+            <Text style={styles.creditBadgeText}>⚡ {userKarma} Prima</Text>
           </View>
         </View>
 
@@ -162,9 +201,10 @@ export default function ExploreScreen({ navigation }: Props) {
           <TouchableOpacity
             style={styles.filterBtn}
             activeOpacity={0.8}
-            accessibilityLabel="Filter Pencarian"
+            onPress={() => loadSessions(true)}
+            accessibilityLabel="Refresh Data"
           >
-            <Text style={styles.filterBtnIcon}>⚙️</Text>
+            <Text style={styles.filterBtnIcon}>🔄</Text>
           </TouchableOpacity>
         </View>
 
@@ -211,7 +251,7 @@ export default function ExploreScreen({ navigation }: Props) {
                 scheduleTab === 'now' && styles.scheduleTabTextActive
               ]}
             >
-              Play Now (3)
+              Play Now ({playNowCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -227,145 +267,207 @@ export default function ExploreScreen({ navigation }: Props) {
                 scheduleTab === 'scheduled' && styles.scheduleTabTextActive
               ]}
             >
-              Terjadwal (12)
+              Terjadwal ({scheduledCount})
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Play Now Alert Banner (Figma 35:482) */}
-        {scheduleTab === 'now' && (
+        {/* Play Now Alert Banner */}
+        {playNowCount > 0 ? (
           <View style={styles.alertBanner}>
             <View style={styles.alertBannerLeft}>
               <View style={styles.playNowBadge}>
                 <Text style={styles.playNowBadgeText}>PLAY NOW</Text>
               </View>
-              <Text style={styles.alertTitle}>3 sesi darurat butuh pemain!</Text>
+              <Text style={styles.alertTitle}>
+                {playNowCount} sesi darurat butuh pemain!
+              </Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('Lobby', {})}>
+            <TouchableOpacity onPress={() => setScheduleTab('now')}>
               <Text style={styles.alertActionText}>Lihat →</Text>
+            </TouchableOpacity>
+          </View>
+        ) : scheduleTab === 'now' ? (
+          <View style={styles.infoBanner}>
+            <Text style={styles.infoBannerText}>
+              ⚡ Belum ada sesi darurat saat ini. Buat sesi baru untuk ajak mabar instan!
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Section Header (Figma 31:71) */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderTitle}>
+            {scheduleTab === 'now' ? 'SESI DARURAT PLAY NOW' : 'SESI TERDEKAT DISEKITARMU'}
+          </Text>
+          <Text style={styles.sectionHeaderMeta}>
+            {loading ? 'Memuat...' : `${filteredSessions.length} sesi aktif`}
+          </Text>
+        </View>
+
+        {/* Loading State */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={THEME.colors.primary} />
+            <Text style={styles.loadingText}>Mengambil jadwal mabar terkini...</Text>
+          </View>
+        )}
+
+        {/* Error State */}
+        {!loading && error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorEmoji}>⚠️</Text>
+            <Text style={styles.errorTitle}>Koneksi API Terkendala</Text>
+            <Text style={styles.errorSubtitle}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => loadSessions(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryBtnText}>Coba Lagi</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Section Header (Figma 31:71) */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionHeaderTitle}>SESI TERDEKAT DISEKITARMU</Text>
-          <Text style={styles.sectionHeaderMeta}>📍 Radius 5 km</Text>
-        </View>
+        {/* Empty State */}
+        {!loading && !error && filteredSessions.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>🏟️</Text>
+            <Text style={styles.emptyTitle}>Belum Ada Sesi Mabar</Text>
+            <Text style={styles.emptySubtitle}>
+              {searchQuery
+                ? `Tidak ditemukan sesi dengan kata kunci "${searchQuery}"`
+                : scheduleTab === 'now'
+                ? 'Tidak ada sesi Play Now saat ini. Coba buka tab Terjadwal.'
+                : 'Belum ada sesi di kategori ini. Jadilah host pertama!'}
+            </Text>
+            <TouchableOpacity
+              style={styles.createBtnEmpty}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('Create')}
+            >
+              <Text style={styles.createBtnEmptyText}>+ Buka Sesi Baru</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Match Pass Bento Ticket Cards (Figma 31:74) */}
-        <View style={styles.ticketList}>
-          {filteredSessions.map((session) => {
-            const emptySlots = session.totalSlots - session.filledSlots;
-            const pips = Array.from({ length: session.totalSlots }, (_, i) => i < session.filledSlots);
-            const isFutsal = session.totalSlots === 10;
+        {!loading && !error && (
+          <View style={styles.ticketList}>
+            {filteredSessions.map((session) => {
+              const kickoff = formatKickoff(session.start_time);
+              const cost = formatCost(session.estimated_cost_total, session.max_slots);
+              const venueName = session.venues?.name || session.custom_location || 'Lokasi menyusul';
+              const hostName = session.profiles?.full_name || 'Host';
+              const hostKarma = session.profiles?.credit_score ?? session.min_credit_score;
+              const isFutsal = session.activity_type.toLowerCase().includes('futsal');
+              const icon = getActivityIcon(session.activity_type);
 
-            return (
-              <View key={session.id} style={styles.matchPassCard}>
-                {/* Stub Header */}
-                <View style={styles.stubHeader}>
-                  <View style={styles.stubHeaderLeft}>
-                    <View style={styles.activityPill}>
-                      <Text style={styles.activityPillText}>
-                        {session.activity}
-                      </Text>
-                    </View>
-                    <View style={styles.modePill}>
-                      <Text style={styles.modePillText}>CONFIRMED SLOT</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hostText}>
-                    Host: {session.hostName} ({session.hostKarma})
-                  </Text>
-                </View>
+              // Host counts as 1 filled slot by default
+              const filledSlots = 1;
+              const emptySlots = Math.max(0, session.max_slots - filledSlots);
 
-                {/* Main Ticket Info Row */}
-                <View style={styles.mainInfoRow}>
-                  {/* Left: Kickoff Box */}
-                  <View style={styles.kickoffBox}>
-                    <Text style={styles.kickoffEyebrow}>KICKOFF</Text>
-                    <Text style={styles.kickoffTime}>{session.time}</Text>
-                    <Text style={styles.kickoffDay}>{session.dayLabel}</Text>
-                  </View>
-
-                  {/* Vertical Divider */}
-                  <View style={styles.verticalDivider} />
-
-                  {/* Right: Title & Meta */}
-                  <View style={styles.detailsBox}>
-                    <Text style={styles.matchTitle} numberOfLines={2}>
-                      {session.title}
-                    </Text>
-                    <Text style={styles.matchVenue} numberOfLines={1}>
-                      {session.venue}
-                    </Text>
-                    <View style={styles.karmaBadgeBox}>
-                      <Text style={styles.karmaBadgeText}>
-                        🛡️ Min Karma: {session.minKarma}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Quota Progress Pips */}
-                <View style={styles.quotaSection}>
-                  <View style={styles.quotaHeader}>
-                    <Text style={styles.quotaTitle}>
-                      KUOTA: {session.filledSlots}/{session.totalSlots} TERISI
-                    </Text>
-                    <Text style={styles.quotaRemaining}>
-                      Sisa {emptySlots} Slot!
-                    </Text>
-                  </View>
-                  <View style={styles.pipsRow}>
-                    {pips.map((filled, idx) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.pip,
-                          isFutsal ? styles.pipFutsal : styles.pipBadminton,
-                          filled && styles.pipActive
-                        ]}
+              return (
+                <View key={session.id} style={styles.matchPassCard}>
+                  {/* Stub Header */}
+                  <View style={styles.stubHeader}>
+                    <View style={styles.stubHeaderLeft}>
+                      <View style={styles.activityPill}>
+                        <Text style={styles.activityPillText}>
+                          {icon} {session.activity_type.toUpperCase()}
+                        </Text>
+                      </View>
+                      <StatusBadge
+                        label={session.status === 'OPEN' ? 'OPEN SLOT' : session.status}
+                        variant={session.status === 'OPEN' ? 'credit' : 'neutral'}
+                        size="sm"
                       />
-                    ))}
+                    </View>
+                    <Text style={styles.hostText}>
+                      Host: {hostName} ({hostKarma})
+                    </Text>
                   </View>
-                </View>
 
-                {/* Perforation Divider with Notches */}
-                <View style={styles.perforationWrapper}>
-                  <View style={styles.notchLeft} />
-                  <View style={styles.dashedLine} />
-                  <View style={styles.notchRight} />
-                </View>
+                  {/* Main Ticket Info Row */}
+                  <View style={styles.mainInfoRow}>
+                    {/* Left: Kickoff Box */}
+                    <View style={styles.kickoffBox}>
+                      <Text style={styles.kickoffEyebrow}>KICKOFF</Text>
+                      <Text style={styles.kickoffTime}>{kickoff.time}</Text>
+                      <Text style={styles.kickoffDay}>{kickoff.dayLabel}</Text>
+                    </View>
 
-                {/* Foot: Cost & CTA */}
-                <View style={styles.ticketFoot}>
-                  <View style={styles.costBox}>
-                    <Text style={styles.costLabel}>EST. PATUNGAN</Text>
-                    <View style={styles.costValueRow}>
-                      <Text style={styles.costAmount}>{session.costPerSlot}</Text>
-                      {session.costPerSlot !== 'Gratis' && (
-                        <Text style={styles.costPerOrg}> / org</Text>
-                      )}
+                    {/* Vertical Divider */}
+                    <View style={styles.verticalDivider} />
+
+                    {/* Right: Title & Meta */}
+                    <View style={styles.detailsBox}>
+                      <Text style={styles.matchTitle} numberOfLines={2}>
+                        {session.title}
+                      </Text>
+                      <Text style={styles.matchVenue} numberOfLines={1}>
+                        📍 {venueName}
+                      </Text>
+                      <View style={styles.karmaBadgeBox}>
+                        <Text style={styles.karmaBadgeText}>
+                          🛡️ Min Karma: {session.min_credit_score}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                  <TouchableOpacity
-                    style={styles.btnDetail}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      navigation.navigate('Lobby', {
-                        sessionId: session.id,
-                        sessionTitle: session.title
-                      })
-                    }
-                  >
-                    <Text style={styles.btnDetailText}>Detail Sesi ➔</Text>
-                  </TouchableOpacity>
+
+                  {/* Quota Progress Pips via Langui Fusion Bento Component */}
+                  <View style={styles.quotaSection}>
+                    <View style={styles.quotaHeader}>
+                      <Text style={styles.quotaTitle}>
+                        KUOTA: {filledSlots}/{session.max_slots} TERISI
+                      </Text>
+                      <Text style={styles.quotaRemaining}>
+                        Sisa {emptySlots} Slot!
+                      </Text>
+                    </View>
+                    <QuotaPips
+                      filled={filledSlots}
+                      total={session.max_slots}
+                      variant={isFutsal ? 'futsal' : 'badminton'}
+                      showCount={false}
+                    />
+                  </View>
+
+                  {/* Perforation Divider with Notches */}
+                  <View style={styles.perforationWrapper}>
+                    <View style={styles.notchLeft} />
+                    <View style={styles.dashedLine} />
+                    <View style={styles.notchRight} />
+                  </View>
+
+                  {/* Foot: Cost & CTA */}
+                  <View style={styles.ticketFoot}>
+                    <View style={styles.costBox}>
+                      <Text style={styles.costLabel}>EST. PATUNGAN</Text>
+                      <View style={styles.costValueRow}>
+                        <Text style={styles.costAmount}>{cost.amount}</Text>
+                        {!cost.isFree && <Text style={styles.costPerOrg}> / org</Text>}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.btnDetail}
+                      activeOpacity={0.8}
+                      onPress={() =>
+                        navigation.navigate('Lobby', {
+                          sessionId: session.id,
+                          sessionTitle: session.title
+                        })
+                      }
+                    >
+                      <Text style={styles.btnDetailText}>Detail Sesi ➔</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -587,6 +689,21 @@ const styles = StyleSheet.create({
     color: THEME.colors.danger,
     includeFontPadding: false
   },
+  infoBanner: {
+    backgroundColor: THEME.colors.cardElevated,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16
+  },
+  infoBannerText: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    includeFontPadding: false
+  },
 
   // Section Header (Figma 31:71)
   sectionHeader: {
@@ -632,12 +749,12 @@ const styles = StyleSheet.create({
   stubHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    gap: 8
   },
   activityPill: {
     backgroundColor: THEME.colors.cardElevated,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6
   },
   activityPillText: {
@@ -645,18 +762,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: THEME.colors.accent,
     letterSpacing: 0.5,
-    includeFontPadding: false
-  },
-  modePill: {
-    backgroundColor: THEME.colors.primaryMuted,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  modePillText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.primary,
     includeFontPadding: false
   },
   hostText: {
@@ -762,26 +867,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.success,
     includeFontPadding: false
   },
-  pipsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4
-  },
-  pip: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)'
-  },
-  pipFutsal: {
-    height: 8,
-    borderRadius: 2
-  },
-  pipBadminton: {
-    height: 8,
-    borderRadius: 2
-  },
-  pipActive: {
-    backgroundColor: THEME.colors.primary
-  },
 
   // Perforation Notch Divider
   perforationWrapper: {
@@ -859,6 +944,100 @@ const styles = StyleSheet.create({
   btnDetailText: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 12,
+    color: THEME.colors.textOnPrimary,
+    includeFontPadding: false
+  },
+
+  // States
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  loadingText: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 10,
+    includeFontPadding: false
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(235, 87, 87, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(235, 87, 87, 0.3)',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginVertical: 16
+  },
+  errorEmoji: {
+    fontSize: 28,
+    marginBottom: 8
+  },
+  errorTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 14,
+    color: THEME.colors.danger,
+    includeFontPadding: false
+  },
+  errorSubtitle: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 12,
+    includeFontPadding: false
+  },
+  retryBtn: {
+    backgroundColor: THEME.colors.cardElevated,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8
+  },
+  retryBtnText: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 12,
+    color: THEME.colors.text,
+    includeFontPadding: false
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  emptyEmoji: {
+    fontSize: 36,
+    marginBottom: 10
+  },
+  emptyTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 15,
+    color: THEME.colors.text,
+    includeFontPadding: false
+  },
+  emptySubtitle: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 16,
+    lineHeight: 18,
+    includeFontPadding: false
+  },
+  createBtnEmpty: {
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10
+  },
+  createBtnEmptyText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 13,
     color: THEME.colors.textOnPrimary,
     includeFontPadding: false
   }
