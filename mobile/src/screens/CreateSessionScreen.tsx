@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TextInput,
-  TouchableOpacity
+  TouchableOpacity,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
+import { api, ApiVenue } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'Create'>;
 
@@ -19,8 +22,40 @@ type SportType = 'Futsal' | 'Badminton' | 'Basket' | 'MLBB';
 type MatchFormat = 'balanced' | 'casual';
 type VisibilityType = 'public' | 'private';
 
+function computeStartTime(dayLabel: string, kickoffTime: string): string {
+  const now = new Date();
+  const targetDate = new Date(now);
+
+  if (dayLabel === 'Besok') {
+    targetDate.setDate(targetDate.getDate() + 1);
+  } else if (dayLabel === 'Sabtu Besok') {
+    const day = targetDate.getDay();
+    const diff = (6 - day + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + diff);
+  } else if (dayLabel === 'Minggu') {
+    const day = targetDate.getDay();
+    const diff = (7 - day + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + diff);
+  }
+
+  const match = kickoffTime.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    targetDate.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
+  } else {
+    targetDate.setHours(19, 0, 0, 0);
+  }
+
+  return targetDate.toISOString();
+}
+
 export default function CreateSessionScreen({ navigation }: Props) {
+  const { user } = useAuthStore();
   const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Venues from backend
+  const [venues, setVenues] = useState<ApiVenue[]>([]);
+  const [loadingVenues, setLoadingVenues] = useState(false);
 
   // Step 1 State
   const [title, setTitle] = useState('Futsal Malam Santai 5v5');
@@ -28,12 +63,14 @@ export default function CreateSessionScreen({ navigation }: Props) {
   const [matchFormat, setMatchFormat] = useState<MatchFormat>('balanced');
   const [quota, setQuota] = useState(10);
   const [visibility, setVisibility] = useState<VisibilityType>('public');
+  const [sessionMode, setSessionMode] = useState<'scheduled' | 'play_now'>('scheduled');
 
   // Step 2 State
-  const [venue, setVenue] = useState('Tifosi Sport Center · Vinyl');
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [venue, setVenue] = useState('Lapangan Cakra Futsal Gading Serpong');
   const [kickoffTime, setKickoffTime] = useState('19:00 - 21:00');
   const [dayLabel, setDayLabel] = useState('Hari Ini');
-  const [totalCost, setTotalCost] = useState('300000');
+  const [totalCost, setTotalCost] = useState('200000');
 
   // Step 3 State
   const [minKarma, setMinKarma] = useState(70);
@@ -71,6 +108,36 @@ export default function CreateSessionScreen({ navigation }: Props) {
     setAlertConfig((prev) => ({ ...prev, visible: false }));
   };
 
+  // Fetch real venues on mount
+  useEffect(() => {
+    async function loadVenues() {
+      setLoadingVenues(true);
+      try {
+        const data = await api.getVenues();
+        setVenues(data);
+        // Pre-select first matching venue if futsal
+        const defaultVenue = data.find((v) => v.supported_activities.includes('futsal'));
+        if (defaultVenue) {
+          setSelectedVenueId(defaultVenue.id);
+          setVenue(defaultVenue.name);
+          setTotalCost((defaultVenue.rate_hourly_min * 2).toString());
+        }
+      } catch (e) {
+        console.warn('[CreateSessionScreen] Error fetching venues:', e);
+      } finally {
+        setLoadingVenues(false);
+      }
+    }
+    loadVenues();
+  }, []);
+
+  // Filter venues based on selected sport
+  const relevantVenues = venues.filter((v) => {
+    const s = sport.toLowerCase();
+    if (s === 'mlbb') return v.category === 'esports';
+    return v.supported_activities.includes(s);
+  });
+
   // Quota stepper controls
   const handleDecrementQuota = () => {
     if (quota > 2) setQuota(quota - 2);
@@ -83,7 +150,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
   const parsedCost = parseInt(totalCost, 10) || 0;
   const splitPerPerson = quota > 0 ? Math.round(parsedCost / quota) : 0;
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (step === 1) {
       if (!title.trim()) {
         showAlert('warning', 'Judul Wajib Diisi', 'Silakan masukkan nama atau judul sesi mabar.');
@@ -97,16 +164,62 @@ export default function CreateSessionScreen({ navigation }: Props) {
       }
       setStep(3);
     } else if (step === 3) {
-      // Publish Session
-      showAlert(
-        'success',
-        'Sesi Berhasil Dipublikasikan! 🚀',
-        `Sesi "${title}" telah live di radar Explore dengan kuota ${quota} pemain dan split Rp ${splitPerPerson.toLocaleString('id-ID')}/org.`,
-        () => {
-          closeAlert();
-          navigation.navigate('Explore');
-        }
-      );
+      // Check auth before publishing
+      if (!user?.id) {
+        showAlert(
+          'warning',
+          'Perlu Login',
+          'Kamu harus masuk dengan akun terlebih dahulu untuk mempublikasikan sesi mabar.',
+          () => {
+            closeAlert();
+            navigation.navigate('Profile');
+          }
+        );
+        return;
+      }
+
+      // Publish Session via API
+      setSubmitting(true);
+      try {
+        const startTime = computeStartTime(dayLabel, kickoffTime);
+        const createdSession = await api.createSession({
+          host_id: user.id,
+          title: title.trim(),
+          activity_type: sport.toLowerCase(),
+          session_category: sport === 'MLBB' ? 'esports' : 'sports',
+          session_mode: sessionMode,
+          venue_id: selectedVenueId || null,
+          custom_location: selectedVenueId ? null : venue.trim(),
+          start_time: startTime,
+          duration_minutes: 120,
+          max_slots: quota,
+          min_credit_score: minKarma,
+          team_format: matchFormat === 'balanced' ? '2_teams' : 'free_for_all',
+          estimated_cost_total: parsedCost
+        });
+
+        showAlert(
+          'success',
+          'Sesi Berhasil Dipublikasikan! 🚀',
+          `Sesi "${createdSession.title}" telah live di radar Explore dengan kuota ${quota} pemain dan split Rp ${splitPerPerson.toLocaleString('id-ID')}/org.`,
+          () => {
+            closeAlert();
+            navigation.navigate('Lobby', {
+              sessionId: createdSession.id,
+              sessionTitle: createdSession.title
+            });
+          }
+        );
+      } catch (err: any) {
+        console.error('[CreateSessionScreen] Publish error:', err);
+        showAlert(
+          'error',
+          'Gagal Mempublikasikan Sesi',
+          err.message || 'Terjadi kesalahan koneksi saat mempublikasikan sesi.'
+        );
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -199,6 +312,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
                   onPress={() => {
                     setSport('Futsal');
                     setQuota(10);
+                    setTitle('Futsal Malam Santai 5v5');
                   }}
                 >
                   <View style={styles.caborCardHeader}>
@@ -229,6 +343,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
                   onPress={() => {
                     setSport('Badminton');
                     setQuota(4);
+                    setTitle('Badminton Ganda Intermediate');
                   }}
                 >
                   <View style={styles.caborCardHeader}>
@@ -259,6 +374,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
                   onPress={() => {
                     setSport('Basket');
                     setQuota(10);
+                    setTitle('Basket 5v5 Full Court Match');
                   }}
                 >
                   <View style={styles.caborCardHeader}>
@@ -289,6 +405,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
                   onPress={() => {
                     setSport('MLBB');
                     setQuota(5);
+                    setTitle('MLBB Mythic Push Party Full Squad');
                   }}
                 >
                   <View style={styles.caborCardHeader}>
@@ -307,6 +424,64 @@ export default function CreateSessionScreen({ navigation }: Props) {
                     )}
                   </View>
                   <Text style={styles.caborSubtitle}>Esports 5-Man Party</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Field: Mode Sesi (Play Now vs Terjadwal) */}
+            <View style={styles.fieldSection}>
+              <View style={styles.fieldHeader}>
+                <Text style={styles.fieldEyebrow}>TIPE PELAKSANAAN</Text>
+                <Text style={styles.sessionModeStatusText}>
+                  {sessionMode === 'play_now' ? '⚡ Darurat / Hari Ini' : '📅 Terencana'}
+                </Text>
+              </View>
+              <View style={styles.visibilityRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityCard,
+                    sessionMode === 'scheduled' && styles.visibilityCardActive
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() => setSessionMode('scheduled')}
+                >
+                  <Text style={styles.visibilityIcon}>📅</Text>
+                  <View>
+                    <Text
+                      style={[
+                        styles.visibilityTitle,
+                        sessionMode === 'scheduled' && styles.visibilityTitleActive
+                      ]}
+                    >
+                      Terjadwal
+                    </Text>
+                    <Text style={styles.visibilityDesc}>Mabar terjadwal santai</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityCard,
+                    sessionMode === 'play_now' && styles.visibilityCardActive
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setSessionMode('play_now');
+                    setDayLabel('Hari Ini');
+                  }}
+                >
+                  <Text style={styles.visibilityIcon}>⚡</Text>
+                  <View>
+                    <Text
+                      style={[
+                        styles.visibilityTitle,
+                        sessionMode === 'play_now' && styles.visibilityTitleActive
+                      ]}
+                    >
+                      Play Now!
+                    </Text>
+                    <Text style={styles.visibilityDesc}>Butuh pemain segera</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
             </View>
@@ -455,30 +630,56 @@ export default function CreateSessionScreen({ navigation }: Props) {
           <View style={styles.stepBody}>
             {/* Field: Nama Venue */}
             <View style={styles.fieldSection}>
-              <Text style={styles.fieldEyebrow}>LOKASI & VENUE LAPANGAN</Text>
+              <View style={styles.fieldHeader}>
+                <Text style={styles.fieldEyebrow}>LOKASI & VENUE LAPANGAN</Text>
+                {loadingVenues && (
+                  <Text style={styles.loadingVenuesText}>Memuat venue...</Text>
+                )}
+              </View>
+
               <View style={styles.inputBox}>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Nama tempat lapangan"
+                  placeholder="Ketik lokasi atau pilih venue terdaftar di bawah"
                   placeholderTextColor={THEME.colors.textMuted}
                   value={venue}
-                  onChangeText={setVenue}
+                  onChangeText={(text) => {
+                    setVenue(text);
+                    setSelectedVenueId(null);
+                  }}
                 />
                 <Text style={styles.inputIcon}>📍</Text>
               </View>
-              {/* Venue Quick Chips */}
+
+              {/* Venue Quick Chips from DB */}
               <View style={styles.quickChipsRow}>
-                {['Tifosi Sport Center', 'Champion Gading Serpong', 'The Hawk BSD'].map(
-                  (v) => (
+                {relevantVenues.map((v) => {
+                  const isSelected = selectedVenueId === v.id;
+                  return (
                     <TouchableOpacity
-                      key={v}
-                      style={styles.quickChip}
-                      onPress={() => setVenue(v)}
+                      key={v.id}
+                      style={[
+                        styles.quickChip,
+                        isSelected && styles.quickChipActive
+                      ]}
+                      onPress={() => {
+                        setSelectedVenueId(v.id);
+                        setVenue(v.name);
+                        setTotalCost((v.rate_hourly_min * 2).toString());
+                      }}
                     >
-                      <Text style={styles.quickChipText}>{v}</Text>
+                      <Text
+                        style={[
+                          styles.quickChipText,
+                          isSelected && styles.quickChipTextActive
+                        ]}
+                      >
+                        {isSelected ? '✓ ' : ''}
+                        {v.name.length > 28 ? v.name.slice(0, 26) + '...' : v.name}
+                      </Text>
                     </TouchableOpacity>
-                  )
-                )}
+                  );
+                })}
               </View>
             </View>
 
@@ -527,7 +728,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
                 <TextInput
                   style={styles.textInput}
                   keyboardType="numeric"
-                  placeholder="300000"
+                  placeholder="200000"
                   placeholderTextColor={THEME.colors.textMuted}
                   value={totalCost}
                   onChangeText={setTotalCost}
@@ -604,7 +805,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
                     </Text>
                   </View>
                   <Text style={styles.previewModeText}>
-                    {visibility === 'public' ? 'PUBLIK' : 'PRIVAT'}
+                    {sessionMode === 'play_now' ? '⚡ PLAY NOW' : '📅 TERJADWAL'}
                   </Text>
                 </View>
 
@@ -618,7 +819,9 @@ export default function CreateSessionScreen({ navigation }: Props) {
                   <View>
                     <Text style={styles.previewFooterLabel}>EST. PATUNGAN</Text>
                     <Text style={styles.previewFooterPrice}>
-                      Rp {splitPerPerson.toLocaleString('id-ID')} / org
+                      {splitPerPerson > 0
+                        ? `Rp ${splitPerPerson.toLocaleString('id-ID')} / org`
+                        : 'Gratis'}
                     </Text>
                   </View>
                   <View style={styles.previewQuotaBadge}>
@@ -634,17 +837,25 @@ export default function CreateSessionScreen({ navigation }: Props) {
 
         {/* Sticky Bottom CTA Button (Figma 194:87) */}
         <TouchableOpacity
-          style={styles.bottomCtaBtn}
+          style={[styles.bottomCtaBtn, submitting && styles.bottomCtaDisabled]}
           activeOpacity={0.8}
+          disabled={submitting}
           onPress={handleNextStep}
         >
-          <Text style={styles.bottomCtaText}>
-            {step === 1
-              ? 'Lanjut ke Step 2: Lokasi & Biaya ➔'
-              : step === 2
-              ? 'Lanjut ke Step 3: Sportifitas ➔'
-              : 'Publikasikan Sesi Mabar 🚀'}
-          </Text>
+          {submitting ? (
+            <View style={styles.submittingRow}>
+              <ActivityIndicator size="small" color={THEME.colors.textOnPrimary} />
+              <Text style={styles.bottomCtaText}>Mempublikasikan Sesi...</Text>
+            </View>
+          ) : (
+            <Text style={styles.bottomCtaText}>
+              {step === 1
+                ? 'Lanjut ke Step 2: Lokasi & Biaya ➔'
+                : step === 2
+                ? 'Lanjut ke Step 3: Sportifitas ➔'
+                : 'Publikasikan Sesi Mabar 🚀'}
+            </Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -778,6 +989,12 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMuted,
     includeFontPadding: false
   },
+  loadingVenuesText: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 10,
+    color: THEME.colors.textMuted,
+    includeFontPadding: false
+  },
   inputBox: {
     height: 44,
     backgroundColor: THEME.colors.card,
@@ -872,6 +1089,14 @@ const styles = StyleSheet.create({
     fontFamily: THEME.typography.fonts.regular,
     fontSize: 10,
     color: THEME.colors.textSecondary,
+    includeFontPadding: false
+  },
+
+  // Session Mode
+  sessionModeStatusText: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 10,
+    color: THEME.colors.primary,
     includeFontPadding: false
   },
 
@@ -1271,6 +1496,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 18
+  },
+  bottomCtaDisabled: {
+    opacity: 0.6
+  },
+  submittingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
   },
   bottomCtaText: {
     fontFamily: THEME.typography.fonts.extraBold,
