@@ -200,3 +200,29 @@ profileRouter.post('/activities', async (c) => {
     );
   }
 });
+
+// GET /api/profile/me/credit-history - Get current user's Credit Score transactions (FR-10)
+profileRouter.get('/me/credit-history', async (c) => {
+  const user = c.get('user');
+
+  try {
+    const { data, error } = await supabase
+      .from('credit_transactions')
+      .select('id, user_id, session_id, delta, reason, balance_after, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return c.json({ success: true, transactions: data || [] });
+  } catch (err: any) {
+    return c.json(
+      {
+        success: false,
+        message: 'Gagal mengambil riwayat Credit Score',
+        error: err.message
+      },
+      500
+    );
+  }
+});
