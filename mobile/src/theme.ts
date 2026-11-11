@@ -18,7 +18,7 @@ export const THEME = {
     // Typography
     text: '#FFFFFF',
     textSecondary: '#C0C2B8',
-    textMuted: '#6B7280',
+    textMuted: '#8A94A6',
     textOnPrimary: '#0A0B0E',       // Hitam pekat di atas #D5FF40
 
     // Borders
@@ -32,6 +32,11 @@ export const THEME = {
     warning: '#FF9F0A',             // Amber
     danger: '#FF3B30',              // Crimson
     accent: '#5E5CE6',              // Electric Indigo
+
+    // Borders (strong variants for outlined controls)
+    borderStrong: 'rgba(192, 194, 184, 0.30)',
+    primarySoft: 'rgba(213, 255, 64, 0.15)',
+    primaryBorder: 'rgba(213, 255, 64, 0.60)',
 
     // Status Surfaces (badge & pill masters: soft bg + strong border)
     successSoft: 'rgba(0, 245, 155, 0.18)',
@@ -47,6 +52,9 @@ export const THEME = {
     whatsapp: '#22C55E',
     whatsappBg: '#14532D',
     whatsappBorder: 'rgba(34, 197, 94, 0.60)',
+
+    // Filled destructive control (Figma: Button / Danger Outlined fill @15)
+    dangerFill: 'rgba(255, 59, 48, 0.15)',
 
     // Overlays
     overlay: 'rgba(8, 11, 16, 0.80)'
@@ -75,53 +83,76 @@ export const THEME = {
     h1: {
       fontFamily: 'Sora-ExtraBold',
       fontSize: 24,
+      lineHeight: 30,
       letterSpacing: -0.5,
       includeFontPadding: false
     },
     h2: {
       fontFamily: 'Sora-Bold',
       fontSize: 18,
+      lineHeight: 24,
       letterSpacing: -0.3,
       includeFontPadding: false
     },
     h3: {
       fontFamily: 'Sora-Bold',
       fontSize: 15,
+      lineHeight: 20,
+      letterSpacing: 0,
+      includeFontPadding: false
+    },
+    cardTitle: {
+      fontFamily: 'Sora-Bold',
+      fontSize: 16,
+      lineHeight: 22,
+      letterSpacing: 0,
+      includeFontPadding: false
+    },
+    bodySmall: {
+      fontFamily: 'Sora-Regular',
+      fontSize: 12,
+      lineHeight: 18,
       letterSpacing: 0,
       includeFontPadding: false
     },
     subtitle: {
       fontFamily: 'Sora-SemiBold',
       fontSize: 13,
+      lineHeight: 18,
       letterSpacing: 0.2,
       includeFontPadding: false
     },
     body: {
       fontFamily: 'Sora-Regular',
       fontSize: 13,
+      lineHeight: 19,
       letterSpacing: 0,
       includeFontPadding: false
     },
     button: {
       fontFamily: 'Sora-Bold',
       fontSize: 14,
+      lineHeight: 18,
       letterSpacing: 0.5,
       includeFontPadding: false
     },
     caption: {
       fontFamily: 'Sora-SemiBold',
       fontSize: 11,
+      lineHeight: 15,
       letterSpacing: 0.4,
       includeFontPadding: false
     },
     micro: {
       fontFamily: 'Sora-Bold',
       fontSize: 10,
+      lineHeight: 14,
       letterSpacing: 0.8,
       includeFontPadding: false
     }
   },
   radius: {
+    xs: 4,                       // Eyebrow pill
     sm: 8,                       // Badge, pips
     md: 12,                      // Chip, input, secondary button
     lg: 16,                      // Card bento, match pass
@@ -152,7 +183,7 @@ export const THEME = {
       count: 10,
       height: 5,
       gap: 4,
-      borderRadius: 2.5,
+      borderRadius: 3,
       activeBg: '#D5FF40',
       emptyBg: 'rgba(255, 255, 255, 0.1)'
     },

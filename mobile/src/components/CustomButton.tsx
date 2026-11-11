@@ -31,16 +31,18 @@ interface VariantPalette {
   borderColor?: string;
   borderWidth?: number;
   textColor: string;
+  pressedBackgroundColor?: string;
 }
 
 const VARIANTS: Record<ButtonVariant, VariantPalette> = {
   primary: {
     backgroundColor: THEME.colors.primary,
-    textColor: THEME.colors.textOnPrimary
+    textColor: THEME.colors.textOnPrimary,
+    pressedBackgroundColor: THEME.colors.primaryLight
   },
   secondary: {
     backgroundColor: THEME.colors.cardElevated,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: THEME.colors.borderStrong,
     borderWidth: 1,
     textColor: THEME.colors.text
   },
@@ -51,14 +53,15 @@ const VARIANTS: Record<ButtonVariant, VariantPalette> = {
     textColor: THEME.colors.whatsapp
   },
   danger: {
-    backgroundColor: THEME.colors.dangerSoft,
+    backgroundColor: THEME.colors.dangerFill,
     borderColor: THEME.colors.dangerBorder,
     borderWidth: 1,
     textColor: THEME.colors.text
   },
   fab: {
     backgroundColor: THEME.colors.primary,
-    textColor: THEME.colors.textOnPrimary
+    textColor: THEME.colors.textOnPrimary,
+    pressedBackgroundColor: THEME.colors.primaryLight
   }
 };
 
@@ -89,7 +92,8 @@ export default function CustomButton({
         onPress={onPress}
         style={({ pressed }) => [
           styles.fab,
-          pressed && styles.pressed,
+          pressed && !isDisabled ? { backgroundColor: THEME.colors.primaryLight } : null,
+          pressed && !isDisabled && styles.pressed,
           isDisabled && styles.disabled,
           style
         ]}
@@ -118,13 +122,16 @@ export default function CustomButton({
         styles.base,
         {
           height,
-          backgroundColor: palette.backgroundColor,
+          backgroundColor:
+            pressed && !isDisabled && palette.pressedBackgroundColor
+              ? palette.pressedBackgroundColor
+              : palette.backgroundColor,
           borderColor: palette.borderColor,
           borderWidth: palette.borderWidth || 0
         },
         fullWidth ? styles.fullWidth : styles.autoWidth,
         isDisabled && styles.disabled,
-        pressed && styles.pressed,
+        pressed && !isDisabled && styles.pressed,
         style
       ]}
     >
@@ -155,7 +162,7 @@ const styles = StyleSheet.create({
   },
   fullWidth: { alignSelf: 'stretch' },
   autoWidth: { alignSelf: 'flex-start' },
-  pressed: { opacity: 0.85 },
+  pressed: { transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.5 },
   label: {
     ...THEME.typography.button,
