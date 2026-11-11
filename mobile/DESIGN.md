@@ -46,9 +46,19 @@ Dokumentasi spesifikasi desain resmi untuk aplikasi mobile **Mabar (MainBareng)*
 | Token | Nilai Hex | Peruntukan / Semantik |
 | :--- | :--- | :--- |
 | `THEME.colors.success` | `#00F59B` | **Mint Emerald** — Slot tersedia, on-time, verifikasi sukses |
-| `THEME.colors.warning` | `#FF9F0A` | **Amber** — Kuota hampir habis, peringatan karma 51–79 |
+| `THEME.colors.warning` | `#FF9F0A` | **Amber** — Kuota hampir habis, peringatan credit 51–79 |
 | `THEME.colors.danger` | `#FF3B30` | **Crimson** — Akun dibekukan, penalti mangkir, tombol destruktif |
 | `THEME.colors.accent` | `#5E5CE6` | **Electric Indigo** — Link aksi, tag esport, OVR badge |
+
+### Status Surfaces (badge / pill masters)
+| Token | Nilai | Peruntukan |
+| :--- | :--- | :--- |
+| `THEME.colors.successSoft` / `successBorder` | `rgba(0,245,155,0.18)` / `rgba(0,245,155,0.60)` | Surface & border badge **Credit Teladan** |
+| `THEME.colors.warningSoft` / `warningBorder` | `rgba(255,159,10,0.18)` / `rgba(255,159,10,0.60)` | Surface & border badge **Urgent Kick-Off** |
+| `THEME.colors.dangerSoft` / `dangerBorder` | `rgba(255,59,48,0.20)` / `rgba(255,59,48,0.80)` | Surface & border badge **Sisa Slot** / tombol destruktif |
+| `THEME.colors.accentSoft` / `accentBorder` | `rgba(94,92,230,0.15)` / `rgba(94,92,230,0.60)` | Surface & border tag esport |
+| `THEME.colors.whatsapp` / `whatsappBg` / `whatsappBorder` | `#22C55E` / `#14532D` / `rgba(34,197,94,0.60)` | Tombol **WhatsApp Fast Action** |
+| `THEME.colors.overlay` | `rgba(8,11,16,0.80)` | Backdrop modal & bottom sheet |
 
 ---
 
@@ -124,6 +134,19 @@ Dokumentasi spesifikasi desain resmi untuk aplikasi mobile **Mabar (MainBareng)*
 - **Empty Fill:** `rgba(255, 255, 255, 0.1)`
 
 ---
+
+### Reusable Components (`mobile/src/components/`)
+
+| Komponen | Varian / Props Inti | Padanan Master Figma |
+| :--- | :--- | :--- |
+| `CustomButton` | `variant`: `primary` · `secondary` · `whatsapp` · `danger` · `fab`; `size`: `md` (48) · `sm` (40); `loading`, `disabled`, `fullWidth`, `icon` | Button / Primary Volt, Secondary Outlined, WhatsApp Fast Action, Danger Outlined, FAB Circular |
+| `InputForm` | `label`, `value`, `error`, `helper`, `leftIcon`/`rightIcon`, `multiline`, `maxLength` + `showCounter`; border neon saat fokus, border danger saat error | Input / Text Field (Idle & Focused Neon) |
+| `StatusBadge` | `variant`: `urgent` · `slotWarning` · `credit` · `neutral` · `accent`; `size`: `sm` · `md` | Badge / Urgent Kick-Off, Sisa Slot Warning, Credit Teladan |
+| `BentoCard` | container bento (`elevated`, `padded`, `onPress`) + slot `eyebrow`/`title`/`subtitle`/`rightAccessory`/`footer` | Card / Match Session (Sport) & seluruh Bento surface |
+| `QuotaPips` | `variant`: `futsal` (10 pips) · `badminton` (4 pips); `filled`, `total`, `label`, `showCount` | Pips / Futsal (10 Slots), Pips / Badminton (4 Slots) |
+| `CustomAlertModal` | modal alert existing (error/success/warning/info) — backdrop kini pakai `THEME.colors.overlay` | Alert / Modal |
+
+Semua komponen wajib impor `THEME` dari `../theme` — tanpa hex hardcoded.
 
 ## 🛡️ Aturan Coding untuk Developer & AI Agent
 1. **Dilarang keras menggunakan *hardcoded hex color*:** Seluruh warna wajib mengimpor `THEME.colors.*`.
