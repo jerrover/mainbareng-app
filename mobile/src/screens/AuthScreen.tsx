@@ -235,29 +235,6 @@ export default function AuthScreen({ route, navigation }: Props) {
           </Text>
         </View>
 
-        {/* Google SSO Button */}
-        <TouchableOpacity
-          style={styles.btnGoogle}
-          onPress={() =>
-            showAlert(
-              'Google SSO UMN',
-              'Integrasi Google Single Sign-On (@student.umn.ac.id) segera hadir di rilis berikutnya. Silakan gunakan akun email.',
-              'info'
-            )
-          }
-          disabled={loading}
-        >
-          <Text style={styles.googleIcon}>🌐</Text>
-          <Text style={styles.btnGoogleText}>Lanjutkan dengan Akun Google</Text>
-        </TouchableOpacity>
-
-        {/* Divider */}
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>atau gunakan email</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
         {/* Form Fields */}
         <View style={styles.formContainer}>
           {isSignUp && (
@@ -467,47 +444,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     includeFontPadding: false,
     lineHeight: 18
-  },
-  btnGoogle: {
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginBottom: 16
-  },
-  googleIcon: {
-    fontSize: 16,
-    textAlignVertical: 'center',
-    includeFontPadding: false
-  },
-  btnGoogleText: {
-    fontFamily: THEME.typography.fonts.medium,
-    fontSize: 13,
-    color: THEME.colors.text,
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 18
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(31, 44, 71, 0.8)'
-  },
-  dividerText: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 11,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
   },
   formContainer: {
     gap: 16
