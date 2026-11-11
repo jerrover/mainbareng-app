@@ -152,3 +152,20 @@ Semua komponen wajib impor `THEME` dari `../theme` — tanpa hex hardcoded.
 1. **Dilarang keras menggunakan *hardcoded hex color*:** Seluruh warna wajib mengimpor `THEME.colors.*`.
 2. **Gunakan `THEME.radius.*` dan `THEME.spatial.*`:** Jangan memasang angka acak seperti `borderRadius: 13` atau `padding: 17`.
 3. **Setiap modifikasi UI wajib dicek silang ke Figma:** File key `kB2Rxyg0JdTf9qABRR8uxZ`, Mabar Master (Draft).
+
+
+---
+
+## ✨ 6. Visual Polish v1.1 (Wave 1)
+
+Penyempurnaan **tampilan** pada komponen reusable — tanpa mengubah perilaku/API:
+
+- **Typography**: seluruh token kini punya `lineHeight` (h1 30 · h2 24 · h3 20 · subtitle 18 · body 19 · button 18 · caption 15 · micro 14). Token baru: `cardTitle` (16/22) dan `bodySmall` (12/18).
+- **Warna**: `textMuted` dinaikkan ke `#8A94A6` (kontras ≥ 4.5:1 di surface gelap). Token baru: `borderStrong` (30%), `primarySoft` (15%), `primaryBorder` (60%), `dangerFill` (15%).
+- **CustomButton**: pressed state memakai `primaryLight` + scale `0.98`; border secondary 30%; fill danger 15%.
+- **InputForm**: label 12px SemiBold, padding horizontal 16px, nilai berubah SemiBold saat fokus.
+- **StatusBadge**: padding 12px; varian baru `brand`; prop `tone="solid"` untuk badge tebal (volt/amber/mint/indigo).
+- **BentoCard**: radius asimetris default (kiri-atas 28px), `accentColor` (garis aksen 3px di kiri), eyebrow berbentuk pill, judul 16px, subtitle 12px, footer harga (`priceLabel` / `priceValue` mint 15px ExtraBold) + `footerAction` compact.
+- **QuotaPips**: default dikelompokkan 2 grup (mis. 5+5 futsal, 2+2 badminton), radius 3.
+
+> Contoh: `accentColor={THEME.colors.accent}` untuk e-sports, `THEME.colors.primary` untuk olahraga.

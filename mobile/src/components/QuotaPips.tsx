@@ -10,6 +10,7 @@ export interface QuotaPipsProps {
   variant?: QuotaPipsVariant;
   label?: string;
   showCount?: boolean;
+  groups?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -24,12 +25,20 @@ export default function QuotaPips({
   variant = 'futsal',
   label,
   showCount = true,
+  groups = 2,
   style
 }: QuotaPipsProps) {
   const config = PIPS[variant];
   const count = total || config.count;
   const safeFilled = Math.max(0, Math.min(filled, count));
-  const pips = Array.from({ length: count }, (_, index) => index < safeFilled);
+  const groupCount = Math.max(1, Math.min(groups, count));
+  const perGroup = Math.ceil(count / groupCount);
+  const grouped: boolean[][] = Array.from({ length: groupCount }, (_, groupIndex) =>
+    Array.from({ length: perGroup }, (_, indexInGroup) => {
+      const pipIndex = groupIndex * perGroup + indexInGroup;
+      return pipIndex < count && pipIndex < safeFilled;
+    }).filter((_, indexInGroup) => groupIndex * perGroup + indexInGroup < count)
+  );
   const hasHeader = Boolean(label) || showCount;
 
   return (
@@ -44,17 +53,21 @@ export default function QuotaPips({
           ) : null}
         </View>
       ) : null}
-      <View style={[styles.row, { gap: config.gap }]}>
-        {pips.map((active, index) => (
-          <View
-            key={`pip-${index}`}
-            style={{
-              flex: 1,
-              height: config.height,
-              borderRadius: config.borderRadius,
-              backgroundColor: active ? config.activeBg : config.emptyBg
-            }}
-          />
+      <View style={[styles.groups, { gap: THEME.components.futsalPips.gap + 6 }]}>
+        {grouped.map((groupPips, groupIndex) => (
+          <View key={`group-${groupIndex}`} style={[styles.group, { gap: config.gap }]}>
+            {groupPips.map((active, pipIndex) => (
+              <View
+                key={`pip-${groupIndex}-${pipIndex}`}
+                style={{
+                  flex: 1,
+                  height: config.height,
+                  borderRadius: config.borderRadius,
+                  backgroundColor: active ? config.activeBg : config.emptyBg
+                }}
+              />
+            ))}
+          </View>
         ))}
       </View>
     </View>
@@ -77,7 +90,11 @@ const styles = StyleSheet.create({
     ...THEME.typography.caption,
     color: THEME.colors.textMuted
   },
-  row: {
+  groups: {
+    flexDirection: 'row'
+  },
+  group: {
+    flex: 1,
     flexDirection: 'row'
   }
 });
