@@ -31,7 +31,25 @@ export const THEME = {
     success: '#00F59B',             // Mint Emerald
     warning: '#FF9F0A',             // Amber
     danger: '#FF3B30',              // Crimson
-    accent: '#5E5CE6'               // Electric Indigo
+    accent: '#5E5CE6',              // Electric Indigo
+
+    // Status Surfaces (badge & pill masters: soft bg + strong border)
+    successSoft: 'rgba(0, 245, 155, 0.18)',
+    successBorder: 'rgba(0, 245, 155, 0.60)',
+    warningSoft: 'rgba(255, 159, 10, 0.18)',
+    warningBorder: 'rgba(255, 159, 10, 0.60)',
+    dangerSoft: 'rgba(255, 59, 48, 0.20)',
+    dangerBorder: 'rgba(255, 59, 48, 0.80)',
+    accentSoft: 'rgba(94, 92, 230, 0.15)',
+    accentBorder: 'rgba(94, 92, 230, 0.60)',
+
+    // WhatsApp Fast Action (Figma master: Button / WhatsApp Fast Action)
+    whatsapp: '#22C55E',
+    whatsappBg: '#14532D',
+    whatsappBorder: 'rgba(34, 197, 94, 0.60)',
+
+    // Overlays
+    overlay: 'rgba(8, 11, 16, 0.80)'
   },
   typography: {
     fontFamily: 'Sora-Regular',

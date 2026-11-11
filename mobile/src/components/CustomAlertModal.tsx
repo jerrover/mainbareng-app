@@ -170,7 +170,7 @@ export default function CustomAlertModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(8, 11, 16, 0.8)',
+    backgroundColor: THEME.colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24
