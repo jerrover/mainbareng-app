@@ -12,6 +12,7 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
+import { BentoCard, CustomButton, InputForm, QuotaPips, StatusBadge } from '../components';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'Create'>;
 
@@ -36,7 +37,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
   const [totalCost, setTotalCost] = useState('300000');
 
   // Step 3 State
-  const [minKarma, setMinKarma] = useState(70);
+  const [minCreditScore, setMinCreditScore] = useState(70);
 
   // Alert State
   const [alertConfig, setAlertConfig] = useState<{
@@ -119,9 +120,9 @@ export default function CreateSessionScreen({ navigation }: Props) {
   };
 
   const stepSubtitles = [
-    'Langkah 1 dari 3: Info & Format',
-    'Langkah 2 dari 3: Lokasi & Estimasi Patungan',
-    'Langkah 3 dari 3: Konfirmasi & Sportifitas'
+    'Info & format sesi',
+    'Lokasi & estimasi patungan',
+    'Konfirmasi & publikasi'
   ];
 
   return (
@@ -141,9 +142,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
           <Text style={styles.wizardSubtitle}>{stepSubtitles[step - 1]}</Text>
         </View>
 
-        <View style={styles.stepBadge}>
-          <Text style={styles.stepBadgeText}>STEP {step}/3</Text>
-        </View>
+        <StatusBadge label={`STEP ${step}/3`} variant="brand" tone="solid" size="sm" />
       </View>
 
       {/* Stepper Progress Bar (Figma 194:13) */}
@@ -167,26 +166,19 @@ export default function CreateSessionScreen({ navigation }: Props) {
                 <Text style={styles.fieldEyebrow}>NAMA / JUDUL SESI MABAR</Text>
                 <Text style={styles.charCounter}>{title.length} / 50</Text>
               </View>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Contoh: Futsal Malam Santai 5v5"
-                  placeholderTextColor={THEME.colors.textMuted}
-                  value={title}
-                  maxLength={50}
-                  onChangeText={setTitle}
-                />
-                <Text style={styles.inputIcon}>✏️</Text>
-              </View>
+              <InputForm
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Contoh: Futsal Malam Santai 5v5"
+                maxLength={50}
+              />
             </View>
 
             {/* Field: Pilih Cabor (Figma 194:25) */}
             <View style={styles.fieldSection}>
               <View style={styles.fieldHeader}>
                 <Text style={styles.fieldEyebrow}>PILIH CABANG OLAHRAGA / GAME</Text>
-                <View style={styles.multiSportBadge}>
-                  <Text style={styles.multiSportBadgeText}>MULTI-SPORT ✓</Text>
-                </View>
+                <StatusBadge label="MULTI-SPORT" variant="neutral" size="sm" />
               </View>
               <View style={styles.caborGrid}>
                 {/* Futsal */}
@@ -315,9 +307,7 @@ export default function CreateSessionScreen({ navigation }: Props) {
             <View style={styles.fieldSection}>
               <View style={styles.fieldHeader}>
                 <Text style={styles.fieldEyebrow}>FORMAT PERTANDINGAN</Text>
-                <View style={styles.aiBalancedBadge}>
-                  <Text style={styles.aiBalancedBadgeText}>AI BALANCED ⚡</Text>
-                </View>
+                <StatusBadge label="AI BALANCED" variant="brand" tone="solid" size="sm" />
               </View>
               <View style={styles.formatRow}>
                 <TouchableOpacity
@@ -365,31 +355,38 @@ export default function CreateSessionScreen({ navigation }: Props) {
             </View>
 
             {/* Field: Target Kuota Pemain (Figma 194:62) */}
-            <View style={styles.quotaStepperCard}>
-              <View>
-                <Text style={styles.quotaStepperEyebrow}>TARGET KUOTA PEMAIN</Text>
-                <Text style={styles.quotaStepperSubtitle}>
-                  {quota / 2} vs {quota / 2} Pemain (Format Lapangan)
-                </Text>
+            <BentoCard eyebrow="TARGET KUOTA">
+              <View style={styles.quotaRow}>
+                <View>
+                  <Text style={styles.quotaValue}>{quota}</Text>
+                  <Text style={styles.quotaHint}>{quota / 2} vs {quota / 2} pemain</Text>
+                </View>
+                <View style={styles.stepperControls}>
+                  <TouchableOpacity
+                    style={styles.stepperBtn}
+                    activeOpacity={0.7}
+                    onPress={handleDecrementQuota}
+                  >
+                    <Text style={styles.stepperMinusIcon}>−</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.stepperBtn, styles.stepperBtnPlus]}
+                    activeOpacity={0.7}
+                    onPress={handleIncrementQuota}
+                  >
+                    <Text style={styles.stepperPlusIcon}>+</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.stepperControls}>
-                <TouchableOpacity
-                  style={styles.stepperMinusBtn}
-                  activeOpacity={0.7}
-                  onPress={handleDecrementQuota}
-                >
-                  <Text style={styles.stepperMinusIcon}>−</Text>
-                </TouchableOpacity>
-                <Text style={styles.stepperValue}>{quota}</Text>
-                <TouchableOpacity
-                  style={styles.stepperPlusBtn}
-                  activeOpacity={0.7}
-                  onPress={handleIncrementQuota}
-                >
-                  <Text style={styles.stepperPlusIcon}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+              <QuotaPips
+                filled={quota}
+                total={quota}
+                variant={sport === 'Badminton' ? 'badminton' : 'futsal'}
+                label={`${quota} SLOT · 2 TIM`}
+                showCount={false}
+                groups={2}
+              />
+            </BentoCard>
 
             {/* Field: Visibilitas Lobi (Figma 194:72) */}
             <View style={styles.fieldSection}>
@@ -456,16 +453,11 @@ export default function CreateSessionScreen({ navigation }: Props) {
             {/* Field: Nama Venue */}
             <View style={styles.fieldSection}>
               <Text style={styles.fieldEyebrow}>LOKASI & VENUE LAPANGAN</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Nama tempat lapangan"
-                  placeholderTextColor={THEME.colors.textMuted}
-                  value={venue}
-                  onChangeText={setVenue}
-                />
-                <Text style={styles.inputIcon}>📍</Text>
-              </View>
+              <InputForm
+                value={venue}
+                onChangeText={setVenue}
+                placeholder="Nama tempat lapangan"
+              />
               {/* Venue Quick Chips */}
               <View style={styles.quickChipsRow}>
                 {['Tifosi Sport Center', 'Champion Gading Serpong', 'The Hawk BSD'].map(
@@ -485,16 +477,11 @@ export default function CreateSessionScreen({ navigation }: Props) {
             {/* Field: Jadwal Kickoff */}
             <View style={styles.fieldSection}>
               <Text style={styles.fieldEyebrow}>JADWAL & WAKTU KICKOFF</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Contoh: 19:00 - 21:00"
-                  placeholderTextColor={THEME.colors.textMuted}
-                  value={kickoffTime}
-                  onChangeText={setKickoffTime}
-                />
-                <Text style={styles.inputIcon}>⏰</Text>
-              </View>
+              <InputForm
+                value={kickoffTime}
+                onChangeText={setKickoffTime}
+                placeholder="Contoh: 19:00 - 21:00"
+              />
               {/* Day Chips */}
               <View style={styles.quickChipsRow}>
                 {['Hari Ini', 'Besok', 'Sabtu Besok', 'Minggu'].map((d) => (
@@ -522,17 +509,13 @@ export default function CreateSessionScreen({ navigation }: Props) {
             {/* Field: Total Biaya Sewa & Split Calculator */}
             <View style={styles.fieldSection}>
               <Text style={styles.fieldEyebrow}>TOTAL BIAYA SEWA LAPANGAN</Text>
-              <View style={styles.inputBox}>
-                <Text style={styles.rpPrefix}>Rp</Text>
-                <TextInput
-                  style={styles.textInput}
-                  keyboardType="numeric"
-                  placeholder="300000"
-                  placeholderTextColor={THEME.colors.textMuted}
-                  value={totalCost}
-                  onChangeText={setTotalCost}
-                />
-              </View>
+              <InputForm
+                value={totalCost}
+                onChangeText={setTotalCost}
+                keyboardType="numeric"
+                placeholder="300000"
+                leftIcon="Rp"
+              />
             </View>
 
             {/* Auto Patungan Summary Card */}
@@ -559,28 +542,28 @@ export default function CreateSessionScreen({ navigation }: Props) {
         {/* STEP 3: Aturan Sportifitas & Ringkasan */}
         {step === 3 && (
           <View style={styles.stepBody}>
-            {/* Field: Min Karma Requirement */}
+            {/* Field: Min Credit Requirement */}
             <View style={styles.fieldSection}>
               <View style={styles.fieldHeader}>
-                <Text style={styles.fieldEyebrow}>SYARAT MINIMUM KARMA SCORE</Text>
-                <Text style={styles.karmaSelectedLabel}>
-                  🛡️ Skor: {minKarma} ({minKarma >= 80 ? 'Disiplin' : 'Sportif'})
+                <Text style={styles.fieldEyebrow}>MINIMAL CREDIT SCORE</Text>
+                <Text style={styles.creditSelectedLabel}>
+                  Credit {minCreditScore} · {minCreditScore >= 80 ? 'Disiplin' : 'Sportif'}
                 </Text>
               </View>
-              <View style={styles.karmaQuickRow}>
+              <View style={styles.creditQuickRow}>
                 {[60, 70, 80, 90].map((k) => (
                   <TouchableOpacity
                     key={k}
                     style={[
-                      styles.karmaBtn,
-                      minKarma === k && styles.karmaBtnActive
+                      styles.creditBtn,
+                      minCreditScore === k && styles.creditBtnActive
                     ]}
-                    onPress={() => setMinKarma(k)}
+                    onPress={() => setMinCreditScore(k)}
                   >
                     <Text
                       style={[
-                        styles.karmaBtnText,
-                        minKarma === k && styles.karmaBtnTextActive
+                        styles.creditBtnText,
+                        minCreditScore === k && styles.creditBtnTextActive
                       ]}
                     >
                       {k}+
@@ -588,65 +571,57 @@ export default function CreateSessionScreen({ navigation }: Props) {
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.karmaHelper}>
+              <Text style={styles.creditHelper}>
                 Pemain dengan reputasi sering cancel mendadak tidak akan bisa masuk lobi ini.
               </Text>
             </View>
 
             {/* Ticket Preview Card */}
             <View style={styles.previewSection}>
-              <Text style={styles.previewEyebrow}>PREVIEW MATCH PASS TICKET</Text>
-              <View style={styles.previewCard}>
-                <View style={styles.previewHeader}>
-                  <View style={styles.previewSportBadge}>
-                    <Text style={styles.previewSportText}>
-                      ⚽ {sport.toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.previewModeText}>
-                    {visibility === 'public' ? 'PUBLIK' : 'PRIVAT'}
-                  </Text>
-                </View>
-
-                <Text style={styles.previewTitle}>{title}</Text>
-                <Text style={styles.previewVenue}>📍 {venue}</Text>
-                <Text style={styles.previewTime}>
-                  ⏰ {dayLabel} · {kickoffTime}
-                </Text>
-
-                <View style={styles.previewFooter}>
-                  <View>
-                    <Text style={styles.previewFooterLabel}>EST. PATUNGAN</Text>
-                    <Text style={styles.previewFooterPrice}>
-                      Rp {splitPerPerson.toLocaleString('id-ID')} / org
-                    </Text>
-                  </View>
-                  <View style={styles.previewQuotaBadge}>
-                    <Text style={styles.previewQuotaText}>
-                      Kuota: {quota} Pemain
-                    </Text>
-                  </View>
-                </View>
-              </View>
+              <Text style={styles.fieldEyebrow}>PREVIEW SESSION PASS</Text>
+              <BentoCard
+                eyebrow={`${sport.toUpperCase()} · ${quota / 2}v${quota / 2}`}
+                title={title}
+                subtitle={`${venue} · ${dayLabel} ${kickoffTime}`}
+                accentColor={sport === 'MLBB' ? THEME.colors.accent : THEME.colors.primary}
+                rightAccessory={
+                  <StatusBadge
+                    label={visibility === 'public' ? 'PUBLIK' : 'PRIVAT'}
+                    variant={visibility === 'public' ? 'brand' : 'neutral'}
+                    tone={visibility === 'public' ? 'solid' : 'soft'}
+                    size="sm"
+                  />
+                }
+                priceLabel="EST. PATUNGAN"
+                priceValue={`Rp ${splitPerPerson.toLocaleString('id-ID')} / org`}
+              >
+                <QuotaPips
+                  filled={0}
+                  total={quota}
+                  variant={sport === 'Badminton' ? 'badminton' : 'futsal'}
+                  label="KUOTA TERISI SAAT INI"
+                  groups={2}
+                />
+              </BentoCard>
             </View>
           </View>
         )}
 
-        {/* Sticky Bottom CTA Button (Figma 194:87) */}
-        <TouchableOpacity
-          style={styles.bottomCtaBtn}
-          activeOpacity={0.8}
-          onPress={handleNextStep}
-        >
-          <Text style={styles.bottomCtaText}>
-            {step === 1
-              ? 'Lanjut ke Step 2: Lokasi & Biaya ➔'
-              : step === 2
-              ? 'Lanjut ke Step 3: Sportifitas ➔'
-              : 'Publikasikan Sesi Mabar 🚀'}
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
+
+      {/* Sticky Bottom CTA (Figma 194:87) */}
+      <View style={styles.footerBar}>
+        <CustomButton
+          label={
+            step === 1
+              ? 'Lanjut · Lokasi & Biaya'
+              : step === 2
+              ? 'Lanjut · Konfirmasi'
+              : 'Publikasikan Sesi'
+          }
+          onPress={handleNextStep}
+        />
+      </View>
 
       {/* Custom Alert Modal */}
       <CustomAlertModal
@@ -676,24 +651,30 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
     paddingTop: 8,
-    paddingBottom: 120
+    paddingBottom: 28
   },
-
-  // Wizard Top Bar (Figma SCR-07 194:5)
+  footerBar: {
+    paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: THEME.colors.background,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.border
+  },
   wizardTopBar: {
-    height: 52,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: THEME.spatial.screenPaddingHorizontal
   },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: THEME.radius.full,
     backgroundColor: THEME.colors.cardElevated,
     borderWidth: 1,
-    borderColor: 'rgba(192, 194, 184, 0.2)',
+    borderColor: THEME.colors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -719,24 +700,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     includeFontPadding: false
   },
-  stepBadge: {
-    height: 28,
-    paddingHorizontal: 10,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1,
-    borderColor: 'rgba(213, 255, 64, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  stepBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-
-  // Stepper Bar (Figma 194:13)
   stepperBar: {
     flexDirection: 'row',
     gap: 6,
@@ -752,8 +715,6 @@ const styles = StyleSheet.create({
   stepSegmentActive: {
     backgroundColor: THEME.colors.primary
   },
-
-  // Step Body
   stepBody: {
     gap: 14
   },
@@ -774,51 +735,8 @@ const styles = StyleSheet.create({
   },
   charCounter: {
     fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 10,
+    fontSize: 11,
     color: THEME.colors.textMuted,
-    includeFontPadding: false
-  },
-  inputBox: {
-    height: 44,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: 'rgba(213, 255, 64, 0.4)',
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14
-  },
-  textInput: {
-    flex: 1,
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 13,
-    color: THEME.colors.text,
-    includeFontPadding: false,
-    paddingVertical: 0
-  },
-  rpPrefix: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 13,
-    color: THEME.colors.primary,
-    marginRight: 6,
-    includeFontPadding: false
-  },
-  inputIcon: {
-    fontSize: 13,
-    marginLeft: 8
-  },
-
-  // Cabor Grid (Figma 194:25)
-  multiSportBadge: {
-    backgroundColor: THEME.colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6
-  },
-  multiSportBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.textOnPrimary,
     includeFontPadding: false
   },
   caborGrid: {
@@ -828,19 +746,19 @@ const styles = StyleSheet.create({
   },
   caborCard: {
     width: '48.5%',
-    height: 66,
+    minHeight: 72,
     backgroundColor: THEME.colors.card,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    borderRadius: 10,
+    borderRadius: THEME.radius.lg,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     justifyContent: 'space-between'
   },
   caborCardActive: {
-    backgroundColor: THEME.colors.cardElevated,
+    backgroundColor: THEME.colors.primarySoft,
     borderColor: THEME.colors.primary,
-    borderWidth: 1.5
+    borderWidth: 1
   },
   caborCardHeader: {
     flexDirection: 'row',
@@ -870,22 +788,8 @@ const styles = StyleSheet.create({
   },
   caborSubtitle: {
     fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-
-  // Format Pertandingan (Figma 194:50)
-  aiBalancedBadge: {
-    backgroundColor: THEME.colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6
-  },
-  aiBalancedBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.textOnPrimary,
     includeFontPadding: false
   },
   formatRow: {
@@ -894,18 +798,18 @@ const styles = StyleSheet.create({
   },
   formatCard: {
     flex: 1,
-    height: 78,
+    minHeight: 84,
     backgroundColor: THEME.colors.card,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: THEME.radius.lg,
+    padding: 12,
     justifyContent: 'space-between'
   },
   formatCardActive: {
-    backgroundColor: THEME.colors.cardElevated,
+    backgroundColor: THEME.colors.primarySoft,
     borderColor: THEME.colors.primary,
-    borderWidth: 1.5
+    borderWidth: 1
   },
   formatTitle: {
     fontFamily: THEME.typography.fonts.bold,
@@ -918,35 +822,28 @@ const styles = StyleSheet.create({
   },
   formatDesc: {
     fontFamily: THEME.typography.fonts.regular,
-    fontSize: 9,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
-    lineHeight: 12,
+    lineHeight: 16,
     includeFontPadding: false
   },
-
-  // Target Kuota Stepper (Figma 194:62)
-  quotaStepperCard: {
-    height: 64,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderRadius: 12,
+  quotaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14
+    marginBottom: 12
   },
-  quotaStepperEyebrow: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
+  quotaValue: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 24,
+    lineHeight: 30,
+    color: THEME.colors.primary,
     includeFontPadding: false
   },
-  quotaStepperSubtitle: {
-    fontFamily: THEME.typography.fonts.semiBold,
+  quotaHint: {
+    fontFamily: THEME.typography.fonts.regular,
     fontSize: 11,
-    color: THEME.colors.text,
+    color: THEME.colors.textSecondary,
     marginTop: 2,
     includeFontPadding: false
   },
@@ -955,37 +852,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10
   },
-  stepperMinusBtn: {
-    width: 32,
-    height: 32,
+  stepperBtn: {
+    width: 44,
+    height: 44,
     borderRadius: THEME.radius.full,
     backgroundColor: THEME.colors.cardElevated,
     borderWidth: 1,
-    borderColor: 'rgba(192, 194, 184, 0.2)',
+    borderColor: THEME.colors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  stepperBtnPlus: {
+    backgroundColor: THEME.colors.primary,
+    borderColor: THEME.colors.primary
   },
   stepperMinusIcon: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 14,
+    fontSize: 16,
     color: THEME.colors.textMuted,
     includeFontPadding: false
-  },
-  stepperValue: {
-    fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 16,
-    color: THEME.colors.primary,
-    minWidth: 20,
-    textAlign: 'center',
-    includeFontPadding: false
-  },
-  stepperPlusBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center'
   },
   stepperPlusIcon: {
     fontFamily: THEME.typography.fonts.bold,
@@ -993,8 +878,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textOnPrimary,
     includeFontPadding: false
   },
-
-  // Visibilitas (Figma 194:72)
   visibilityStatusText: {
     fontFamily: THEME.typography.fonts.semiBold,
     fontSize: 10,
@@ -1007,19 +890,20 @@ const styles = StyleSheet.create({
   },
   visibilityCard: {
     flex: 1,
-    height: 56,
+    minHeight: 64,
     backgroundColor: THEME.colors.card,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    borderRadius: 10,
+    borderRadius: THEME.radius.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    gap: 8
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10
   },
   visibilityCardActive: {
-    backgroundColor: THEME.colors.cardElevated,
-    borderColor: 'rgba(213, 255, 64, 0.5)',
+    backgroundColor: THEME.colors.primarySoft,
+    borderColor: THEME.colors.primaryBorder,
     borderWidth: 1
   },
   visibilityIcon: {
@@ -1036,12 +920,11 @@ const styles = StyleSheet.create({
   },
   visibilityDesc: {
     fontFamily: THEME.typography.fonts.regular,
-    fontSize: 9,
+    fontSize: 11,
+    lineHeight: 16,
     color: THEME.colors.textSecondary,
     includeFontPadding: false
   },
-
-  // Quick Chips (Step 2)
   quickChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1062,7 +945,7 @@ const styles = StyleSheet.create({
   },
   quickChipText: {
     fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     includeFontPadding: false
   },
@@ -1071,14 +954,12 @@ const styles = StyleSheet.create({
     color: THEME.colors.primary,
     includeFontPadding: false
   },
-
-  // Patungan Calculator Card (Step 2)
   patunganCalcCard: {
     backgroundColor: THEME.colors.card,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
     borderRadius: THEME.radius.lg,
-    padding: 14
+    padding: 18
   },
   patunganCalcHeader: {
     flexDirection: 'row',
@@ -1118,164 +999,55 @@ const styles = StyleSheet.create({
   },
   patunganCalcNote: {
     fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: THEME.colors.textMuted,
-    lineHeight: 14,
+    lineHeight: 15,
     includeFontPadding: false
   },
-
-  // Step 3 (Karma & Preview)
-  karmaSelectedLabel: {
+  creditSelectedLabel: {
     fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 10,
+    fontSize: 11,
     color: THEME.colors.warning,
     includeFontPadding: false
   },
-  karmaQuickRow: {
+  creditQuickRow: {
     flexDirection: 'row',
     gap: 8,
     marginTop: 6
   },
-  karmaBtn: {
+  creditBtn: {
     flex: 1,
-    height: 40,
-    borderRadius: 8,
+    height: 44,
+    borderRadius: THEME.radius.md,
     backgroundColor: THEME.colors.card,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  karmaBtnActive: {
+  creditBtnActive: {
     backgroundColor: THEME.colors.primaryMuted,
     borderColor: THEME.colors.primary
   },
-  karmaBtnText: {
+  creditBtnText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: THEME.colors.textSecondary,
     includeFontPadding: false
   },
-  karmaBtnTextActive: {
+  creditBtnTextActive: {
     color: THEME.colors.primary
   },
-  karmaHelper: {
+  creditHelper: {
     fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
+    lineHeight: 15,
     color: THEME.colors.textMuted,
     marginTop: 4,
     includeFontPadding: false
   },
-
-  // Preview Card
   previewSection: {
     marginTop: 8,
     gap: 8
   },
-  previewEyebrow: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-    includeFontPadding: false
-  },
-  previewCard: {
-    backgroundColor: THEME.colors.card,
-    borderRadius: THEME.radius.lg,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    padding: 14
-  },
-  previewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8
-  },
-  previewSportBadge: {
-    backgroundColor: THEME.colors.cardElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  previewSportText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.accent,
-    includeFontPadding: false
-  },
-  previewModeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  previewTitle: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 14,
-    color: THEME.colors.text,
-    includeFontPadding: false
-  },
-  previewVenue: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    marginTop: 3,
-    includeFontPadding: false
-  },
-  previewTime: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    marginTop: 2,
-    includeFontPadding: false
-  },
-  previewFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: THEME.colors.border
-  },
-  previewFooterLabel: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
-  },
-  previewFooterPrice: {
-    fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 14,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  previewQuotaBadge: {
-    backgroundColor: THEME.colors.cardElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6
-  },
-  previewQuotaText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 10,
-    color: THEME.colors.success,
-    includeFontPadding: false
-  },
-
-  // Bottom Sticky CTA (Figma 194:87)
-  bottomCtaBtn: {
-    height: 50,
-    backgroundColor: THEME.colors.primary,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18
-  },
-  bottomCtaText: {
-    fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 13,
-    color: THEME.colors.textOnPrimary,
-    includeFontPadding: false
-  }
 });
