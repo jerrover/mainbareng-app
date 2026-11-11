@@ -1,10 +1,10 @@
 # Mabar API Reference
 
-Base URL: `https://mainbareng-app.vercel.app` (prod, `main`) · `http://localhost:3001` (local `dev`).
+Base URL: `https://mainbareng-app.vercel.app` (live `dev`) · `http://localhost:3001` (local `dev`).
 
 All `/api/profile/*` endpoints require Supabase Auth header: `Authorization: Bearer <access_token>`. Session and venue endpoints currently have no auth middleware enforced.
 
-> Note: `/api/profile/*` and `POST /api/sessions/:id/teams/split` are on `dev` — production (`main`) returns `404` until `dev` is merged to `main`.
+> Note: Wave 1–4 routes are live on `dev` (`https://mainbareng-app.vercel.app`). Branch `main` has not been synced with Wave 3–4 yet.
 
 ---
 
@@ -131,6 +131,35 @@ Upserts on `(user_id, activity_type)`. `activity_type` is required and normalize
     "created_at": "2026-11-11T03:00:00Z",
     "updated_at": "2026-11-11T03:00:00Z"
   }
+}
+```
+
+---
+
+### Get My Credit Score History
+
+```
+GET /api/profile/me/credit-history
+```
+
+Returns Credit Score ledger entries (`credit_transactions`) for the authenticated user, ordered by `created_at` descending.
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "transactions": [
+    {
+      "id": "d1e2f3a4-0000-0000-0000-000000000001",
+      "user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "session_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "delta": 5,
+      "reason": "COMMENDED_SPORTSMANSHIP",
+      "balance_after": 100,
+      "created_at": "2026-11-11T13:00:00Z"
+    }
+  ]
 }
 ```
 
@@ -388,6 +417,140 @@ Splits active participants (`attendance_status != 'CANCELLED'`) into `Team A` an
 
 ---
 
+### Update Session Status
+
+```
+PATCH /api/sessions/:id/status
+```
+
+Host-only status transition. When transitioning to `"COMPLETED"`, recalculates `total_sessions_completed` and `show_up_rate` in `profiles` for all non-`CANCELLED` participants in the session.
+
+Allowed transitions:
+- `OPEN` → `LOCKED` \| `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED`
+- `LOCKED` → `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED`
+- `IN_PROGRESS` → `COMPLETED` \| `CANCELLED`
+- `COMPLETED` / `CANCELLED` → final (all further changes rejected with `400`)
+
+**Request**
+
+```json
+{
+  "host_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "COMPLETED"
+}
+```
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "host_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Badminton Santai Gading Serpong",
+    "status": "COMPLETED",
+    "updated_at": "2026-11-11T13:00:00Z"
+  }
+}
+```
+
+Errors: `400` (invalid UUID/payload or disallowed status transition), `403` (`host_id` is not session host), `404` (session not found), `409` (concurrent status conflict).
+
+---
+
+### Get Review Targets
+
+```
+GET /api/sessions/:id/review-targets?reviewer_id=<user_uuid>
+```
+
+Returns active session participants eligible for post-match peer review (excludes `reviewer_id` and `CANCELLED` participants), ordered by `slot_number` ascending. Session status must be `"COMPLETED"`.
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "participant_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      "display_name": "Budi",
+      "is_guest": false,
+      "assigned_team": "Team B"
+    }
+  ]
+}
+```
+
+Errors: `400` (invalid UUIDs or session not `COMPLETED`), `403` (`reviewer_id` is not an active participant), `404` (session not found).
+
+---
+
+### Submit Peer Reviews
+
+```
+POST /api/sessions/:id/reviews
+```
+
+Executes `submit_peer_reviews_atomic` RPC. Session must be `"COMPLETED"`; `reviewer_id` and non-guest `target_participant_id`s must be active participants; self-review is rejected (`400`). Items with `"is_guest": true` are skipped and listed in `skipped_guests`. Duplicate `(session_id, reviewer_id, target_user_id)` returns `409`.
+
+Credit Score delta rules (`CREDIT_SCORE_RULES`), capped cumulatively at `-25..+10` per `(target_user_id, session_id)`, with final `credit_score` clamped `0..100` (`is_suspended = credit_score <= 50`):
+- `attendance`: `on_time` (`+2`, `ATTEND_ON_TIME`) \| `late` (`-5`, `LATE_ARRIVAL`) \| `no_show` (`-20`, `NO_SHOW`)
+- `sportsmanship`: `good` (`+5`, `COMMENDED_SPORTSMANSHIP`, ignored if `attendance = "no_show"`) \| `okay` (`0`) \| `poor` (`0`)
+- `level_fit`: `lower` \| `accurate` \| `higher` (recorded without Credit Score delta)
+
+Also updates target participant `attendance_status` (`ATTENDED` / `NO_SHOW` by majority reviewer vote; ties resolve to `ATTENDED`) and recalculates `total_sessions_completed` and `show_up_rate`.
+
+**Request**
+
+```json
+{
+  "reviewer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "reviews": [
+    {
+      "target_participant_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      "attendance": "on_time",
+      "sportsmanship": "good",
+      "level_fit": "accurate",
+      "notes": "Main rapi",
+      "is_guest": false
+    }
+  ]
+}
+```
+
+**Response `201`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "session_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "reviewer_id": "550e8400-e29b-41d4-a716-446655440000",
+    "submitted_count": 1,
+    "skipped_guests": [],
+    "results": [
+      {
+        "review_id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        "target_participant_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        "target_user_id": "660e8400-e29b-41d4-a716-446655440001",
+        "delta_applied": 7,
+        "credit_score_after": 100,
+        "is_suspended": false,
+        "attendance_status": "ATTENDED",
+        "total_sessions_completed": 1,
+        "show_up_rate": 100
+      }
+    ]
+  }
+}
+```
+
+Errors: `400` (invalid payload, session not `COMPLETED`, non-participant target, or self-review), `403` (`reviewer_id` is not an active participant), `404` (session not found), `409` (duplicate review).
+
+---
+
 ## Utility Endpoints
 
 ### Health Check
@@ -423,6 +586,9 @@ GET /health
 | `team_format` | `2_teams` \| `free_for_all` |
 | `skill_rating_level` | `Beginner` \| `Intermediate` \| `Advanced` |
 | `status` (session) | `OPEN` \| `LOCKED` \| `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED` |
+| `attendance` (review) | `on_time` \| `late` \| `no_show` |
+| `sportsmanship` (review) | `good` \| `okay` \| `poor` |
+| `level_fit` (review) | `lower` \| `accurate` \| `higher` |
 
 ## Error Codes
 
@@ -430,7 +596,9 @@ Error JSON uses `{ "success": false, "message": "..." }` or `{ "success": false,
 
 | Status | Condition |
 | --- | --- |
-| 400 | Missing required field, join rule rejected, or fewer than 2 participants on split |
+| 400 | Invalid UUID/payload, join rule rejected, fewer than 2 participants on split, disallowed status transition, session not `COMPLETED`, non-participant target, or self-review |
 | 401 | Missing, malformed, or expired Bearer token (`/api/profile/*`) |
-| 404 | Session not found (`teams/split`) or route not deployed yet on target environment |
-| 500 | Database / Supabase query error |
+| 403 | Non-host updating session status or non-participant calling `review-targets` / `reviews` |
+| 404 | Session not found or route not deployed yet on target environment |
+| 409 | Duplicate `(session_id, reviewer_id, target_user_id)` review or concurrent status change |
+| 500 | Database / Supabase / RPC query error |
