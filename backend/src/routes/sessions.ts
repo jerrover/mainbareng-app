@@ -196,7 +196,6 @@ sessionRouter.post('/:id/teams/split', async (c) => {
           name: profile?.full_name || `Player ${p.slot_number}`,
           skillRating,
           creditScore,
-          karmaScore: creditScore, // adapter kompatibilitas tipe ke teamSplitter
           participantId: p.id,
           slotNumber: p.slot_number
         };

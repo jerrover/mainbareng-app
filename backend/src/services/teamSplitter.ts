@@ -1,14 +1,14 @@
 /**
  * Balanced Team Splitter (FR-07)
  * Algoritma pembagian 2 kubu berimbang (Team A & Team B)
- * berdasarkan kombinasi Skill Rating (SR) dan Karma Score.
+ * berdasarkan kombinasi Skill Rating (SR) dan Credit Score.
  */
 
 export interface PlayerInput {
   id?: string;
   name?: string;
   skillRating?: number | string;
-  karmaScore?: number | string;
+  creditScore?: number | string;
   [key: string]: unknown;
 }
 
@@ -30,12 +30,12 @@ export function splitTeams(players: PlayerInput[]): SplitResult {
     return { teamA: [], teamB: [], ratingDiff: 0 };
   }
 
-  // 1. Hitung skor efektif tiap pemain: bobot SR 80% + bobot Karma 20%
+  // 1. Hitung skor efektif tiap pemain: bobot SR 80% + bobot Credit Score 20%
   const enriched: EnrichedPlayer[] = players.map((p) => {
     const sr = Number(p.skillRating || 1200);
-    const karma = Number(p.karmaScore || 100);
-    // Normalisasi: SR ~1000-2000, Karma 0-100 (dikalikan 15 agar skalanya seimbang)
-    const effectivePower = sr * 0.8 + karma * 15 * 0.2;
+    const creditScore = Number(p.creditScore || 100);
+    // Normalisasi: SR ~1000-2000, Credit Score 0-100 (dikalikan 15 agar skalanya seimbang)
+    const effectivePower = sr * 0.8 + creditScore * 15 * 0.2;
     return { ...p, effectivePower };
   });
 

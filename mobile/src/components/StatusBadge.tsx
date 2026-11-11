@@ -2,65 +2,105 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { THEME } from '../theme';
 
-export type StatusBadgeVariant = 'urgent' | 'slotWarning' | 'credit' | 'neutral' | 'accent';
+export type StatusBadgeVariant =
+  | 'urgent'
+  | 'slotWarning'
+  | 'credit'
+  | 'brand'
+  | 'accent'
+  | 'neutral';
+export type StatusBadgeTone = 'soft' | 'solid';
 
 export interface StatusBadgeProps {
   label: string;
   variant?: StatusBadgeVariant;
+  tone?: StatusBadgeTone;
   icon?: string;
   size?: 'sm' | 'md';
   style?: StyleProp<ViewStyle>;
 }
 
-const VARIANTS: Record<StatusBadgeVariant, { bg: string; border: string; text: string }> = {
+interface BadgePalette {
+  softBg: string;
+  border: string;
+  text: string;
+  solidBg: string;
+  solidText: string;
+}
+
+const VARIANTS: Record<StatusBadgeVariant, BadgePalette> = {
   urgent: {
-    bg: THEME.colors.warningSoft,
+    softBg: THEME.colors.warningSoft,
     border: THEME.colors.warningBorder,
-    text: THEME.colors.warning
+    text: THEME.colors.warning,
+    solidBg: THEME.colors.warning,
+    solidText: THEME.colors.textOnPrimary
   },
   slotWarning: {
-    bg: THEME.colors.dangerSoft,
+    softBg: THEME.colors.dangerSoft,
     border: THEME.colors.dangerBorder,
-    text: THEME.colors.danger
+    text: THEME.colors.danger,
+    solidBg: THEME.colors.danger,
+    solidText: THEME.colors.text
   },
   credit: {
-    bg: THEME.colors.successSoft,
+    softBg: THEME.colors.successSoft,
     border: THEME.colors.successBorder,
-    text: THEME.colors.success
+    text: THEME.colors.success,
+    solidBg: THEME.colors.success,
+    solidText: THEME.colors.textOnPrimary
+  },
+  brand: {
+    softBg: THEME.colors.primarySoft,
+    border: THEME.colors.primaryBorder,
+    text: THEME.colors.primary,
+    solidBg: THEME.colors.primary,
+    solidText: THEME.colors.textOnPrimary
   },
   accent: {
-    bg: THEME.colors.accentSoft,
+    softBg: THEME.colors.accentSoft,
     border: THEME.colors.accentBorder,
-    text: THEME.colors.accent
+    text: THEME.colors.accent,
+    solidBg: THEME.colors.accent,
+    solidText: THEME.colors.text
   },
   neutral: {
-    bg: THEME.colors.cardElevated,
+    softBg: THEME.colors.cardElevated,
     border: THEME.colors.cardBorder,
-    text: THEME.colors.textSecondary
+    text: THEME.colors.textSecondary,
+    solidBg: THEME.colors.cardElevated,
+    solidText: THEME.colors.text
   }
 };
 
 export default function StatusBadge({
   label,
   variant = 'neutral',
+  tone = 'soft',
   icon,
   size = 'md',
   style
 }: StatusBadgeProps) {
   const palette = VARIANTS[variant];
+  const solid = tone === 'solid';
+  const backgroundColor = solid ? palette.solidBg : palette.softBg;
+  const textColor = solid ? palette.solidText : palette.text;
 
   return (
     <View
       style={[
         styles.base,
         size === 'sm' && styles.sm,
-        { backgroundColor: palette.bg, borderColor: palette.border },
+        {
+          backgroundColor,
+          borderColor: solid ? palette.solidBg : palette.border
+        },
         style
       ]}
     >
-      {icon ? <Text style={[styles.icon, { color: palette.text }]}>{icon}</Text> : null}
+      {icon ? <Text style={[styles.icon, { color: textColor }]}>{icon}</Text> : null}
       <Text
-        style={[styles.label, size === 'sm' && styles.labelSm, { color: palette.text }]}
+        style={[styles.label, size === 'sm' && styles.labelSm, { color: textColor }]}
         numberOfLines={1}
       >
         {label}
@@ -76,17 +116,18 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     gap: 4,
     height: 26,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: THEME.radius.sm,
     borderWidth: 1
   },
   sm: {
     height: 22,
-    paddingHorizontal: 8
+    paddingHorizontal: 10
   },
   label: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 11,
+    lineHeight: 14,
     letterSpacing: 0.4,
     includeFontPadding: false
   },

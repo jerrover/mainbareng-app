@@ -82,7 +82,11 @@ export default function InputForm({
         {leftIcon ? <Text style={styles.leftIcon}>{leftIcon}</Text> : null}
         <TextInput
           testID={testID}
-          style={[styles.input, multiline && styles.multilineInput]}
+          style={[
+            styles.input,
+            multiline && styles.multilineInput,
+            focused && value.length > 0 && styles.inputFocused
+          ]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -118,8 +122,11 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   label: {
-    ...THEME.typography.caption,
-    letterSpacing: 0.8
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.2,
+    includeFontPadding: false
   },
   counter: {
     ...THEME.typography.caption,
@@ -132,7 +139,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.cardElevated,
     borderWidth: 1,
     borderRadius: THEME.radius.md,
-    paddingHorizontal: 14
+    paddingHorizontal: 16
   },
   multilineBox: {
     minHeight: 96,
@@ -144,6 +151,9 @@ const styles = StyleSheet.create({
     ...THEME.typography.body,
     color: THEME.colors.text,
     paddingVertical: 0
+  },
+  inputFocused: {
+    fontFamily: THEME.typography.fonts.semiBold
   },
   multilineInput: {
     textAlignVertical: 'top'
