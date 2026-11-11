@@ -474,7 +474,7 @@ sessionRouter.post('/:id/reviews', async (c) => {
   const sessionId = paramParse.data.id;
   const { reviewer_id, reviews } = bodyParse.data;
 
-  // Pastikan setiap item non-guest sesuai rule mapping KARMA_RULES
+  // Pastikan setiap item non-guest sesuai rule mapping CREDIT_SCORE_RULES
   for (const item of reviews) {
     if (!item.is_guest) {
       buildReviewRuleEntries(item.attendance, item.sportsmanship);

@@ -1,6 +1,6 @@
 import app from '../src/index';
 import { supabase } from '../src/db/supabase';
-import { KARMA_RULES } from '../src/services/karmaCalculator';
+import { CREDIT_SCORE_RULES } from '../src/services/creditCalculator';
 import {
   applySessionCreditCap,
   buildReviewRuleEntries,
@@ -163,7 +163,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
   });
 
   // ============================================================================
-  // 2. POST /api/sessions/:id/reviews + KARMA_RULES delta & cap unit tests
+  // 2. POST /api/sessions/:id/reviews + CREDIT_SCORE_RULES delta & cap unit tests
   // ============================================================================
   describe('POST /api/sessions/:id/reviews', () => {
     it('should return 201 on successful atomic peer review submission', async () => {
@@ -426,13 +426,13 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
       // no_show + good must ignore COMMENDED_SPORTSMANSHIP (+5)
       const noShowEntries = buildReviewRuleEntries('no_show', 'good');
       expect(noShowEntries).toEqual([
-        { reason: 'NO_SHOW', delta: KARMA_RULES.NO_SHOW }
+        { reason: 'NO_SHOW', delta: CREDIT_SCORE_RULES.NO_SHOW }
       ]);
 
       // poor sportsmanship yields 0 extra penalty beyond attendance rule
       const poorEntries = buildReviewRuleEntries('on_time', 'poor');
       expect(poorEntries).toEqual([
-        { reason: 'ATTEND_ON_TIME', delta: KARMA_RULES.ATTEND_ON_TIME }
+        { reason: 'ATTEND_ON_TIME', delta: CREDIT_SCORE_RULES.ATTEND_ON_TIME }
       ]);
 
       // Positive cumulative cap +10 across reviewers: existing +7 + (+2 +5) => only +3 applied

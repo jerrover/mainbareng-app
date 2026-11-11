@@ -1,4 +1,4 @@
-import { KARMA_RULES, KarmaRuleType } from './karmaCalculator';
+import { CREDIT_SCORE_RULES, CreditScoreRuleType } from './creditCalculator';
 
 export type ReviewAttendance = 'on_time' | 'late' | 'no_show';
 export type ReviewSportsmanship = 'good' | 'okay' | 'poor';
@@ -7,7 +7,7 @@ export const SESSION_DELTA_MIN = -25;
 export const SESSION_DELTA_MAX = 10;
 
 export interface RuleDeltaEntry {
-  reason: KarmaRuleType;
+  reason: CreditScoreRuleType;
   delta: number;
 }
 
@@ -30,7 +30,7 @@ export interface RecomputedSessionMetrics {
 }
 
 /**
- * Menghitung daftar rule penyesuaian credit berdasarkan KARMA_RULES.
+ * Menghitung daftar rule penyesuaian credit berdasarkan CREDIT_SCORE_RULES.
  * Jika attendance = 'no_show', bonus sportivitas diabaikan.
  */
 export function buildReviewRuleEntries(
@@ -40,17 +40,17 @@ export function buildReviewRuleEntries(
   const entries: RuleDeltaEntry[] = [];
 
   if (attendance === 'on_time') {
-    entries.push({ reason: 'ATTEND_ON_TIME', delta: KARMA_RULES.ATTEND_ON_TIME });
+    entries.push({ reason: 'ATTEND_ON_TIME', delta: CREDIT_SCORE_RULES.ATTEND_ON_TIME });
   } else if (attendance === 'late') {
-    entries.push({ reason: 'LATE_ARRIVAL', delta: KARMA_RULES.LATE_ARRIVAL });
+    entries.push({ reason: 'LATE_ARRIVAL', delta: CREDIT_SCORE_RULES.LATE_ARRIVAL });
   } else {
-    entries.push({ reason: 'NO_SHOW', delta: KARMA_RULES.NO_SHOW });
+    entries.push({ reason: 'NO_SHOW', delta: CREDIT_SCORE_RULES.NO_SHOW });
   }
 
   if (attendance !== 'no_show' && sportsmanship === 'good') {
     entries.push({
       reason: 'COMMENDED_SPORTSMANSHIP',
-      delta: KARMA_RULES.COMMENDED_SPORTSMANSHIP
+      delta: CREDIT_SCORE_RULES.COMMENDED_SPORTSMANSHIP
     });
   }
 

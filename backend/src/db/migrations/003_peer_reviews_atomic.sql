@@ -256,7 +256,7 @@ BEGIN
 
             v_total_applied_delta := 0;
 
-            -- Rule 1: Attendance (KARMA_RULES)
+            -- Rule 1: Attendance (CREDIT_SCORE_RULES)
             IF v_attendance = 'on_time' THEN
                 v_rule_name := 'ATTEND_ON_TIME';
                 v_rule_delta := 2;
