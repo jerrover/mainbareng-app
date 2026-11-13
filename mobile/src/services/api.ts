@@ -152,6 +152,30 @@ export const api = {
     return json;
   },
 
+  async getMyProfile(): Promise<ApiProfile | null> {
+    try {
+      const authHeaders = await getAuthHeader();
+      if (!authHeaders.Authorization) return null;
+      const res = await fetch(`${BASE_URL}/api/profile/me`, {
+        headers: authHeaders
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.profile || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async getSession(id: string): Promise<ApiSession> {
+    const res = await fetch(`${BASE_URL}/api/sessions/${id}`);
+    if (!res.ok) {
+      throw new Error(`Gagal mengambil detail sesi: HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    return json.data;
+  },
+
   async splitTeams(sessionId: string): Promise<any> {
     const authHeaders = await getAuthHeader();
     const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/teams/split`, {
