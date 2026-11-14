@@ -485,7 +485,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
             activeOpacity={0.8}
             onPress={() => navigation.navigate('Explore')}
           >
-            <Text style={styles.backBtnIcon}>←</Text>
+            <Text style={styles.backBtnIcon}>‹</Text>
           </TouchableOpacity>
           <View style={styles.topBarCenter}>
             <Text style={styles.topBarTitle} numberOfLines={1}>
@@ -522,7 +522,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
           />
           <Text style={styles.liveIndicatorText}>
             {isLiveConnected
-              ? 'Terhubung Database Supabase & Realtime CDC'
+              ? 'Terkoneksi ke Server'
               : 'Mode Simulasi (Data Fallback)'}
           </Text>
         </View>
@@ -540,7 +540,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
               📍 {venueTitle}
             </Text>
             <TouchableOpacity onPress={handleOpenMaps}>
-              <Text style={styles.openMapsText}>Buka Maps →</Text>
+              <Text style={styles.openMapsText}>📍 Cari Lokasi</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -549,7 +549,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
         <View style={styles.splitBillCard}>
           <View style={styles.splitBillHeader}>
             <View style={styles.splitBillInfoBox}>
-              <Text style={styles.splitBillLabel}>ESTIMASI PATUNGAN DINAMIS</Text>
+              <Text style={styles.splitBillLabel}>Estimasi Patungan / orang </Text>
               <Text style={styles.splitBillCondition} numberOfLines={1}>
                 {venueTotalCost > 0
                   ? `Biaya sewa: Rp ${venueTotalCost.toLocaleString('id-ID')} · Saat ini: Rp ${currentCostPerPlayer.toLocaleString('id-ID')}/org`
@@ -634,7 +634,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
         {isLoading && !isRefreshing && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={THEME.colors.primary} />
-            <Text style={styles.loadingText}>Memuat roster pemain dari Supabase...</Text>
+            <Text style={styles.loadingText}>Load data, please wait...</Text>
           </View>
         )}
 
@@ -734,7 +734,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
                     <Text style={styles.emptySlotSubtitle}>Menunggu pemain bergabung...</Text>
                   </View>
                   <View style={styles.readyBadge}>
-                    <Text style={styles.readyBadgeText}>Siap Diisi ⚡</Text>
+                    <Text style={styles.readyBadgeText}>Available</Text>
                   </View>
                 </View>
               );
@@ -753,7 +753,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
             <ActivityIndicator size="small" color={THEME.colors.primary} />
           ) : (
             <Text style={styles.balancerBtnText}>
-              ⚖️ Jalankan Balanced Team Splitter (Biru vs Merah)
+               Jalankan Balanced Team Splitter (Biru vs Merah)
             </Text>
           )}
         </TouchableOpacity>
@@ -791,7 +791,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
                 <ActivityIndicator size="small" color={THEME.colors.textOnPrimary} />
               ) : (
                 <Text style={styles.btnJoinPrimaryText}>
-                  ⚡ KUNCI 1 SLOT SEKARANG (Rp {fullTargetCostPerPlayer.toLocaleString('id-ID')})
+                   Kunci 1 Slot Sekarang! (Rp {fullTargetCostPerPlayer.toLocaleString('id-ID')})
                 </Text>
               )}
             </TouchableOpacity>
@@ -847,7 +847,9 @@ const styles = StyleSheet.create({
   },
   backBtnIcon: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 16,
+    fontSize: 30,
+    marginBottom: 2,
+    flex: 1,
     color: THEME.colors.text,
     includeFontPadding: false
   },
@@ -1371,7 +1373,8 @@ const styles = StyleSheet.create({
   },
   btnJoinPrimaryText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '900',
     color: THEME.colors.textOnPrimary,
     letterSpacing: 0.5,
     includeFontPadding: false

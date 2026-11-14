@@ -461,7 +461,7 @@ export default function ExploreScreen({ navigation }: Props) {
             ]}
           />
           <Text style={styles.liveIndicatorText}>
-            {isLiveConnected ? 'Live Supabase API Active' : 'Offline Mode (Fallback Data)'}
+            {isLiveConnected ? 'Online' : 'Offline Mode (Fallback Data)'}
           </Text>
         </View>
 
@@ -588,7 +588,7 @@ export default function ExploreScreen({ navigation }: Props) {
         {isLoading && !isRefreshing && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={THEME.colors.primary} />
-            <Text style={styles.loadingText}>Menghubungkan ke API Supabase...</Text>
+            <Text style={styles.loadingText}>Fetching Data, please wait...</Text>
           </View>
         )}
 

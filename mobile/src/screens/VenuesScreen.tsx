@@ -313,7 +313,7 @@ export default function VenuesScreen({ navigation }: Props) {
             ]}
           />
           <Text style={styles.liveIndicatorText}>
-            {isLiveConnected ? 'Live Supabase API Active' : 'Offline Mode (Fallback Data)'}
+            {isLiveConnected ? 'Connected to Database' : 'Offline Mode (Fallback Data)'}
           </Text>
         </View>
 
