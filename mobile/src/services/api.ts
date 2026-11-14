@@ -59,6 +59,7 @@ export interface ApiSession {
   venues?: {
     name?: string;
     address?: string;
+    maps_url?: string | null;
   } | null;
 }
 
