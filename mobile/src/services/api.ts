@@ -79,6 +79,46 @@ export interface CreateSessionPayload {
   estimated_cost_total?: number;
 }
 
+// --- Peer review (Wave 4) ---
+
+export interface ApiReviewTarget {
+  participant_id: string;
+  display_name: string;
+  is_guest: boolean;
+  assigned_team: 'Team A' | 'Team B' | null;
+}
+
+export type ReviewAttendance = 'on_time' | 'late' | 'no_show';
+export type ReviewSportsmanship = 'good' | 'okay' | 'poor';
+export type ReviewLevelFit = 'lower' | 'accurate' | 'higher';
+
+export interface SubmitReviewItem {
+  target_participant_id: string;
+  attendance: ReviewAttendance;
+  sportsmanship: ReviewSportsmanship;
+  level_fit: ReviewLevelFit;
+  notes?: string | null;
+  is_guest?: boolean;
+}
+
+export interface SubmitReviewsResult {
+  session_id: string;
+  reviewer_id: string;
+  submitted_count: number;
+  skipped_guests: string[];
+  results: Array<{
+    review_id: string;
+    target_participant_id: string;
+    target_user_id: string;
+    delta_applied: number;
+    credit_score_after: number;
+    is_suspended: boolean;
+    attendance_status: string;
+    total_sessions_completed: number;
+    show_up_rate: number;
+  }>;
+}
+
 async function getAuthHeader(): Promise<Record<string, string>> {
   try {
     const { data } = await supabase.auth.getSession();
@@ -189,6 +229,37 @@ export const api = {
     const json = await res.json();
     if (!res.ok || !json.success) {
       throw new Error(json.message || json.error || 'Gagal membagi tim');
+    }
+    return json.data;
+  },
+
+  async getReviewTargets(sessionId: string, reviewerId: string): Promise<ApiReviewTarget[]> {
+    const query = new URLSearchParams({ reviewer_id: reviewerId });
+    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/review-targets?${query.toString()}`);
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error || 'Gagal memuat daftar peserta yang bisa dinilai');
+    }
+    return json.data || [];
+  },
+
+  async submitReviews(
+    sessionId: string,
+    reviewerId: string,
+    reviews: SubmitReviewItem[]
+  ): Promise<SubmitReviewsResult> {
+    const authHeaders = await getAuthHeader();
+    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/reviews`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify({ reviewer_id: reviewerId, reviews })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error || 'Gagal mengirim penilaian');
     }
     return json.data;
   }
