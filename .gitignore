@@ -22,6 +22,17 @@ mobile/.env
 coverage/
 backend/coverage/
 
+# Local uploaded receipt references (testing datasets)
+backend/uploads/
+
+# OCR traineddata models
+*.traineddata
+backend/*.traineddata
+
+# Scratch test images and CSV caches
+backend/scripts/*.jpg
+backend/scripts/*.csv
+
 # Local reports & academic drafts
 reports/
 *.pdf
