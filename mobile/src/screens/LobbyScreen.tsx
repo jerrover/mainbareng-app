@@ -15,7 +15,9 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
+import RatingModal from '../components/RatingModal';
 import { api, ApiSession } from '../services/api';
+import type { ApiReviewTarget, SubmitReviewItem } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 
@@ -96,6 +98,12 @@ export default function LobbyScreen({ route, navigation }: Props) {
   const [isSplitting, setIsSplitting] = useState<boolean>(false);
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
+
+  // Wave 4: Rating & Sportivitas pasca-sesi
+  const [isRatingVisible, setIsRatingVisible] = useState<boolean>(false);
+  const [reviewTargets, setReviewTargets] = useState<ApiReviewTarget[]>([]);
+  const [isLoadingTargets, setIsLoadingTargets] = useState<boolean>(false);
+  const [isSubmittingReviews, setIsSubmittingReviews] = useState<boolean>(false);
 
   const [activeTeamTab, setActiveTeamTab] = useState<'all' | 'A' | 'B'>('all');
 
@@ -463,6 +471,50 @@ export default function LobbyScreen({ route, navigation }: Props) {
     }
   };
 
+  // 5. Wave 4: Rating & Sportivitas pasca-sesi
+  const canReview = useMemo(() => {
+    return currentSession?.status === 'COMPLETED' && !!user?.id && hasJoined;
+  }, [currentSession?.status, user?.id, hasJoined]);
+
+  const handleOpenRating = async () => {
+    if (!currentSession?.id || !user?.id) return;
+    setIsRatingVisible(true);
+    setIsLoadingTargets(true);
+    try {
+      const targets = await api.getReviewTargets(currentSession.id, user.id);
+      setReviewTargets(targets);
+    } catch (err: any) {
+      setReviewTargets([]);
+      showAlert(
+        'error',
+        'Gagal Memuat Peserta',
+        err.message || 'Daftar peserta yang bisa dinilai belum tersedia.'
+      );
+    } finally {
+      setIsLoadingTargets(false);
+    }
+  };
+
+  const handleSubmitReviews = async (reviews: SubmitReviewItem[]) => {
+    if (!currentSession?.id || !user?.id) return;
+    setIsSubmittingReviews(true);
+    try {
+      const result = await api.submitReviews(currentSession.id, user.id, reviews);
+      setIsRatingVisible(false);
+      setReviewTargets([]);
+      const rated = result?.submitted_count ?? reviews.length;
+      showAlert(
+        'success',
+        'Penilaian Terkirim 🛡️',
+        `${rated} teman berhasil dinilai. Credit Score mereka sudah diperbarui otomatis.`
+      );
+    } catch (err: any) {
+      showAlert('error', 'Gagal Mengirim Penilaian', err.message || 'Coba lagi sebentar lagi.');
+    } finally {
+      setIsSubmittingReviews(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
@@ -771,7 +823,15 @@ export default function LobbyScreen({ route, navigation }: Props) {
 
         {/* Sticky Join Action Footer */}
         <View style={styles.footerActionBox}>
-          {hasJoined ? (
+          {canReview ? (
+            <TouchableOpacity
+              style={styles.ratingCtaBtn}
+              activeOpacity={0.8}
+              onPress={handleOpenRating}
+            >
+              <Text style={styles.ratingCtaText}>Beri Rating &amp; Sportivitas ⭐</Text>
+            </TouchableOpacity>
+          ) : hasJoined ? (
             <View style={styles.joinedBanner}>
               <Text style={styles.joinedBannerText}>
                 ✓ Anda Terdaftar di Sesi Ini
@@ -798,6 +858,17 @@ export default function LobbyScreen({ route, navigation }: Props) {
           )}
         </View>
       </ScrollView>
+
+      {/* Wave 4: Rating & Sportivitas Modal */}
+      <RatingModal
+        visible={isRatingVisible}
+        sessionTitle={currentSession?.title}
+        targets={reviewTargets}
+        loading={isLoadingTargets}
+        submitting={isSubmittingReviews}
+        onClose={() => setIsRatingVisible(false)}
+        onSubmit={handleSubmitReviews}
+      />
 
       {/* Custom Alert Modal */}
       <CustomAlertModal
@@ -1378,5 +1449,18 @@ const styles = StyleSheet.create({
     color: THEME.colors.textOnPrimary,
     letterSpacing: 0.5,
     includeFontPadding: false
+  },
+  ratingCtaBtn: {
+    backgroundColor: THEME.colors.accent,
+    height: THEME.components.buttonPrimary.height,
+    borderRadius: THEME.components.buttonPrimary.borderRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: THEME.colors.accentBorder
+  },
+  ratingCtaText: {
+    ...THEME.typography.button,
+    color: THEME.colors.text
   }
 });

@@ -15,3 +15,6 @@ export type { QuotaPipsProps, QuotaPipsVariant } from './QuotaPips';
 
 export { default as CustomAlertModal } from './CustomAlertModal';
 export type { CustomAlertModalProps, AlertType } from './CustomAlertModal';
+
+export { default as RatingModal } from './RatingModal';
+export type { RatingModalProps } from './RatingModal';
