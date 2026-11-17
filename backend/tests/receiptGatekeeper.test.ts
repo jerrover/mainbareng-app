@@ -211,4 +211,8 @@ describe('Automated Receipt Gatekeeper (FR-12 · Split-Bill)', () => {
       expect(json.error).toBe('GATEKEEPER_ERROR');
     });
   });
+
+  afterAll(async () => {
+    await receiptGatekeeper.terminateOcrWorker();
+  });
 });
