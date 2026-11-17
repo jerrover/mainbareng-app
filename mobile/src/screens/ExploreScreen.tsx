@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
@@ -204,6 +204,8 @@ function getActivityBadgeLabel(activityType: string = ''): string {
 
 export default function ExploreScreen({ navigation }: Props) {
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = 88 + Math.max(insets.bottom + 8, 16);
 
   // Dynamic user profile state
   const [profile, setProfile] = useState<UserProfileHeader>({
@@ -421,7 +423,7 @@ export default function ExploreScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
 import { RootStackParamList } from '../navigation/types';
@@ -14,6 +14,8 @@ import { RootStackParamList } from '../navigation/types';
 type Props = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
 
 export default function WelcomeScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -102,8 +104,8 @@ export default function WelcomeScreen({ navigation }: Props) {
         </View>
       </ScrollView>
 
-      {/* Pinned Bottom Action (Figma 95:48) */}
-      <View style={styles.bottomBar}>
+      {/* Pinned Bottom Action (Figma 95:48) - Dinamis mengikuti navbar */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom + 8, 16) }]}>
         <TouchableOpacity
           style={styles.btnPrimary}
           activeOpacity={0.85}
@@ -121,8 +123,6 @@ export default function WelcomeScreen({ navigation }: Props) {
             <Text style={styles.footerLinkAction}>Masuk di sini</Text>
           </TouchableOpacity>
         </View>
-
-        <View style={styles.homeBar} />
       </View>
     </SafeAreaView>
   );

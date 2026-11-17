@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
@@ -40,6 +40,8 @@ interface ActivityItem {
 }
 
 export default function ProfileScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = 88 + Math.max(insets.bottom + 8, 16);
   const { session, user, signOut } = useAuthStore();
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -218,7 +220,7 @@ export default function ProfileScreen({ navigation }: Props) {
   if (!session || !user) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}>
           <View style={styles.topNav}>
             <Text style={styles.navTitle}>Profil & Reputasi</Text>
           </View>
@@ -253,7 +255,7 @@ export default function ProfileScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
       {/* Top Nav Bar (SCR-16) */}

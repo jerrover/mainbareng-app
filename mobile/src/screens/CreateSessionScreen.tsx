@@ -7,7 +7,7 @@ import {
   TextInput,
   TouchableOpacity
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
@@ -21,6 +21,7 @@ type MatchFormat = 'balanced' | 'casual';
 type VisibilityType = 'public' | 'private';
 
 export default function CreateSessionScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(1);
 
   // Step 1 State
@@ -609,8 +610,8 @@ export default function CreateSessionScreen({ navigation }: Props) {
 
       </ScrollView>
 
-      {/* Sticky Bottom CTA (Figma 194:87) */}
-      <View style={styles.footerBar}>
+      {/* Sticky Bottom CTA (Figma 194:87) - Dinamis mengikuti navbar */}
+      <View style={[styles.footerBar, { paddingBottom: Math.max(insets.bottom + 8, 14) }]}>
         <CustomButton
           label={
             step === 1

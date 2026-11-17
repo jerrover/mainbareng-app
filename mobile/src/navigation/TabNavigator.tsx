@@ -37,12 +37,16 @@ function CenterActionButton({ onPress }: BottomTabBarButtonProps) {
 }
 
 export default function TabNavigator() {
+  const insets = useSafeAreaInsets();
+  // Posisi kapsul dinamis mengikuti safe area insets (navbar Android 3 tombol / gesture pill)
+  const bottomOffset = Math.max(insets.bottom + 8, 16);
+
   return (
     <Tab.Navigator
       initialRouteName="Explore"
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBarCapsule,
+        tabBarStyle: [styles.tabBarCapsule, { bottom: bottomOffset }],
         tabBarActiveTintColor: THEME.colors.primary,
         tabBarInactiveTintColor: THEME.colors.textMuted,
         tabBarLabelStyle: styles.tabBarLabel,

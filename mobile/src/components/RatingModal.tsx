@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../theme';
 import CustomButton from './CustomButton';
 import StatusBadge from './StatusBadge';
@@ -83,6 +84,7 @@ export default function RatingModal({
   onClose,
   onSubmit
 }: RatingModalProps) {
+  const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<Record<string, DraftEntry>>({});
 
   useEffect(() => {
@@ -308,7 +310,7 @@ export default function RatingModal({
             </ScrollView>
           )}
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 8, 20) }]}>
             <CustomButton
               label={
                 loading ? 'Memuat…' : targets.length > 0 ? `Kirim Penilaian (${ratedCount})` : 'Tutup'
