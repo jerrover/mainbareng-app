@@ -11,9 +11,8 @@ import {
   Linking
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
-import { MainTabParamList } from '../navigation/types';
+import { RootStackScreenProps } from '../navigation/types';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 import RatingModal from '../components/RatingModal';
 import { api, ApiSession } from '../services/api';
@@ -21,7 +20,7 @@ import type { ApiReviewTarget, SubmitReviewItem } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 
-type Props = BottomTabScreenProps<MainTabParamList, 'Lobby'>;
+type Props = RootStackScreenProps<'Lobby'>;
 
 interface Player {
   id?: string;
@@ -36,17 +35,8 @@ interface Player {
   isGuest?: boolean;
 }
 
-// Fallback initial roster jika sesi belum ada peserta
-const FALLBACK_PLAYERS: Player[] = [
-  { slot: 1, name: 'Jeremy Marvel', role: 'Pivot / Striker', ovr: 88, karma: 98, team: 'A', isHost: true },
-  { slot: 2, name: 'Ben_Mobile', role: 'Flank Kanan', ovr: 84, karma: 92, team: 'A' },
-  { slot: 3, name: 'Hyun_Striker', role: 'Anchor', ovr: 86, karma: 88, team: 'B' },
-  { slot: 4, name: 'Yua_Design', role: 'Flank Kiri', ovr: 82, karma: 95, team: 'B' },
-  { slot: 5, name: 'Jerikho_Backend', role: 'Kiper Utama', ovr: 89, karma: 90, team: 'A' },
-  { slot: 6, name: 'Budi_W', role: 'Anchor', ovr: 79, karma: 82, team: 'B' },
-  { slot: 7, name: 'Andi_K', role: 'Pivot', ovr: 83, karma: 85, team: 'A' },
-  { slot: 8, name: 'Rian_F', role: 'Kiper', ovr: 80, karma: 78, team: 'B' }
-];
+// Fallback default host jika sesi belum ada peserta
+const DEFAULT_HOST_PLAYERS: Player[] = [];
 
 function formatKickoffTime(isoDateStr?: string | null): { kickoffStr: string; remainingStr: string } {
   if (!isoDateStr) return { kickoffStr: 'Hari Ini, 19:30 WIB', remainingStr: '⏱️ Menunggu Jadwal' };
@@ -88,13 +78,13 @@ function formatKickoffTime(isoDateStr?: string | null): { kickoffStr: string; re
 export default function LobbyScreen({ route, navigation }: Props) {
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
-  const bottomPadding = 88 + Math.max(insets.bottom + 8, 16);
+  const bottomPadding = 24;
   const routeSessionId = route?.params?.sessionId;
   const routeSessionTitle = route?.params?.sessionTitle;
 
   // Session state from database
   const [currentSession, setCurrentSession] = useState<ApiSession | null>(null);
-  const [participants, setParticipants] = useState<Player[]>(FALLBACK_PLAYERS);
+  const [participants, setParticipants] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSplitting, setIsSplitting] = useState<boolean>(false);
@@ -185,10 +175,10 @@ export default function LobbyScreen({ route, navigation }: Props) {
           }
         }
 
-        // Jika tidak ada sesi sama sekali di DB, gunakan fallback
+        // Jika tidak ada sesi sama sekali di DB
         if (!targetId) {
           setIsLiveConnected(false);
-          setParticipants(FALLBACK_PLAYERS);
+          setParticipants([]);
           setIsLoading(false);
           setIsRefreshing(false);
           return;
@@ -204,7 +194,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
         if (sessErr || !sessionData) {
           console.warn('[LobbyScreen] Error fetching session:', sessErr?.message);
           setIsLiveConnected(false);
-          setParticipants(FALLBACK_PLAYERS);
+          setParticipants([]);
           setIsLoading(false);
           setIsRefreshing(false);
           return;
@@ -375,7 +365,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
         'AI Team Balancer Selesai! ⚖️',
         `Tim A (${teamA?.members?.length || 0} pemain, Avg OVR: ${teamA?.average_skill || 1200})\n` +
           `Tim B (${teamB?.members?.length || 0} pemain, Avg OVR: ${teamB?.average_skill || 1200})\n\n` +
-          `Selisih skill seimbang: ${diff}%. Data telah disimpan ke database.`
+          `Selisih skill seimbang: ${diff}%. Pembagian tim telah diperbarui.`
       );
 
       // Re-fetch data terbaru dari database
@@ -537,7 +527,13 @@ export default function LobbyScreen({ route, navigation }: Props) {
           <TouchableOpacity
             style={styles.backBtn}
             activeOpacity={0.8}
-            onPress={() => navigation.navigate('Explore')}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('MainTabs', { screen: 'Explore' });
+              }
+            }}
           >
             <Text style={styles.backBtnIcon}>‹</Text>
           </TouchableOpacity>
@@ -564,21 +560,6 @@ export default function LobbyScreen({ route, navigation }: Props) {
               {currentSession?.status || 'OPEN'} · {participants.length}/{totalSlots}
             </Text>
           </View>
-        </View>
-
-        {/* Live Database Indicator */}
-        <View style={styles.liveIndicatorRow}>
-          <View
-            style={[
-              styles.liveDot,
-              { backgroundColor: isLiveConnected ? THEME.colors.success : THEME.colors.warning }
-            ]}
-          />
-          <Text style={styles.liveIndicatorText}>
-            {isLiveConnected
-              ? 'Terkoneksi ke Server'
-              : 'Mode Simulasi (Data Fallback)'}
-          </Text>
         </View>
 
         {/* Kickoff & Venue Card (Figma 127:96) */}

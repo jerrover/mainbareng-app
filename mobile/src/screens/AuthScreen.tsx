@@ -353,7 +353,7 @@ export default function AuthScreen({ route, navigation }: Props) {
           {/* Legal Disclaimer */}
           <Text style={styles.legalText}>
             Dengan masuk atau mendaftar, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi
-            Mabar (IF670 UMN).
+            Mabar (MainBareng).
           </Text>
         </View>
       </ScrollView>
