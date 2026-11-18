@@ -40,3 +40,6 @@ reports/
 
 # Wrangler
 .wrangler/
+
+# k6 live test user list (dibuat setup-test-users.js, jangan di-commit)
+backend/tests/concurrency/test-users.json
