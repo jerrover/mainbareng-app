@@ -6,7 +6,6 @@ import { serve } from '@hono/node-server';
 import { sessionRouter } from './routes/sessions';
 import { venueRouter } from './routes/venues';
 import { profileRouter } from './routes/profile';
-import { receiptRouter } from './routes/receipts';
 
 dotenv.config();
 
@@ -26,8 +25,7 @@ app.get('/', (c) => {
       authConfirmed: '/auth/confirmed',
       venues: '/api/venues',
       sessions: '/api/sessions',
-      profile: '/api/profile',
-      receipts: '/api/receipts'
+      profile: '/api/profile'
     },
     timestamp: new Date().toISOString()
   });
@@ -138,7 +136,6 @@ app.get('/auth/confirmed', (c) => {
 app.route('/api/sessions', sessionRouter);
 app.route('/api/venues', venueRouter);
 app.route('/api/profile', profileRouter);
-app.route('/api/receipts', receiptRouter);
 
 const port = Number(process.env.PORT) || 3001;
 
