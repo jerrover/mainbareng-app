@@ -207,7 +207,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
         const { data: partData, error: partErr } = await supabase
           .from('session_participants')
           .select(
-            'id, session_id, user_id, is_guest, guest_name, lock_as_duo, slot_number, assigned_team, skill_rating_points, attendance_status, profiles:user_id(id, full_name, credit_score)'
+            'id, session_id, user_id, slot_number, assigned_team, attendance_status, profiles:user_id(id, full_name, credit_score)'
           )
           .eq('session_id', targetId)
           .neq('attendance_status', 'CANCELLED')
@@ -215,13 +215,10 @@ export default function LobbyScreen({ route, navigation }: Props) {
 
         if (!partErr && partData && partData.length > 0) {
           const mappedPlayers: Player[] = partData.map((p: any) => {
-            const isGuest = Boolean(p.is_guest);
-            const resolvedName = isGuest
-              ? `${p.guest_name || 'Tamu'} (Guest)`
-              : p.profiles?.full_name || `Pemain #${p.slot_number}`;
+            const resolvedName = p.profiles?.full_name || `Pemain #${p.slot_number}`;
             const isHost = p.user_id === sessionData.host_id;
             const karma = p.profiles?.credit_score ?? 100;
-            const points = p.skill_rating_points ?? 1200;
+            const points = 1200;
             const ovr = Math.min(99, Math.max(60, Math.round(points / 15)));
 
             // Team A atau Team B
@@ -239,7 +236,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
               karma,
               team,
               isHost,
-              isGuest
+              isGuest: false
             };
           });
 
