@@ -5,7 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 export type MainTabParamList = {
   Explore: undefined;
   MySessions: undefined;
-  Create: undefined;
+  Create: { preselectedVenueId?: string; preselectedVenueName?: string; preselectedRate?: number } | undefined;
   Venues: undefined;
   Profile: undefined;
 };

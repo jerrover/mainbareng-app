@@ -442,7 +442,13 @@ export default function VenuesScreen({ navigation }: Props) {
                     <TouchableOpacity
                       style={styles.useBtn}
                       activeOpacity={0.8}
-                      onPress={() => navigation.navigate('Create')}
+                      onPress={() =>
+                        navigation.navigate('Create', {
+                          preselectedVenueId: item.id,
+                          preselectedVenueName: item.name,
+                          preselectedRate: item.rate_hourly_min
+                        })
+                      }
                     >
                       <Text style={styles.useBtnText}>⚡ Pakai Buat Sesi</Text>
                     </TouchableOpacity>
