@@ -10,7 +10,7 @@ import {
   RefreshControl,
   Linking
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
@@ -120,6 +120,8 @@ function getFacilities(activities: string[] = []): string[] {
 }
 
 export default function VenuesScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = 24;
   const [venues, setVenues] = useState<ApiVenue[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -280,7 +282,7 @@ export default function VenuesScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -296,25 +298,12 @@ export default function VenuesScreen({ navigation }: Props) {
           <View style={styles.titleBox}>
             <Text style={styles.headerTitle}>Katalog Venue & GOR</Text>
             <Text style={styles.headerSubtitle}>
-              Pilihan Lapangan Olahraga Terverifikasi di Database
+              Pilihan Lapangan Olahraga Terverifikasi
             </Text>
           </View>
           <View style={styles.locationPill}>
             <Text style={styles.locationPillText}>📍 Jabodetabek</Text>
           </View>
-        </View>
-
-        {/* Live Database Indicator */}
-        <View style={styles.liveIndicatorRow}>
-          <View
-            style={[
-              styles.liveDot,
-              { backgroundColor: isLiveConnected ? THEME.colors.success : THEME.colors.warning }
-            ]}
-          />
-          <Text style={styles.liveIndicatorText}>
-            {isLiveConnected ? 'Connected to Database' : 'Offline Mode (Fallback Data)'}
-          </Text>
         </View>
 
         {/* Search Bar Container (Figma 191:19) */}
@@ -361,7 +350,7 @@ export default function VenuesScreen({ navigation }: Props) {
         {isLoading && !isRefreshing && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={THEME.colors.primary} />
-            <Text style={styles.loadingText}>Memuat katalog venue dari database...</Text>
+            <Text style={styles.loadingText}>Memuat katalog venue...</Text>
           </View>
         )}
 

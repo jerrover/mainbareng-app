@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
@@ -40,6 +40,8 @@ interface ActivityItem {
 }
 
 export default function ProfileScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = 24;
   const { session, user, signOut } = useAuthStore();
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -146,40 +148,7 @@ export default function ProfileScreen({ navigation }: Props) {
             })
           );
         } else {
-          setActivities([
-            {
-              type: 'Futsal 5v5',
-              level: 'Intermediate',
-              role: 'Flank / Winger',
-              rating: 'Rating 68.5',
-              accentColor: THEME.colors.accent,
-              matches: 12
-            },
-            {
-              type: 'Badminton',
-              level: 'Beginner',
-              role: 'Casual Ganda',
-              rating: 'Rating 42.0',
-              accentColor: THEME.colors.warning,
-              matches: 4
-            },
-            {
-              type: 'Mobile Legends',
-              level: 'Mythic Honor',
-              role: 'Roamer / Mage',
-              rating: 'Rating 82.0',
-              accentColor: THEME.colors.primary,
-              matches: 36
-            },
-            {
-              type: 'Valorant',
-              level: 'Diamond 2',
-              role: 'Controller',
-              rating: 'Rating 75.0',
-              accentColor: THEME.colors.danger,
-              matches: 20
-            }
-          ]);
+          setActivities([]);
         }
       } catch (err) {
         console.warn('[ProfileScreen] Unexpected error:', err);
@@ -218,7 +187,7 @@ export default function ProfileScreen({ navigation }: Props) {
   if (!session || !user) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}>
           <View style={styles.topNav}>
             <Text style={styles.navTitle}>Profil & Reputasi</Text>
           </View>
@@ -253,7 +222,7 @@ export default function ProfileScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
       {/* Top Nav Bar (SCR-16) */}
@@ -283,7 +252,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
         <View style={styles.profileInfoBox}>
           <Text style={styles.profileName}>{name}</Text>
-          <Text style={styles.memberSince}>Member sejak September 2025 · IF670</Text>
+          <Text style={styles.memberSince}>Member sejak September 2025</Text>
           <View style={styles.matchStatsRow}>
             <Text style={styles.matchCount}>{totalSessions} Match Selesai</Text>
             <Text style={styles.statDot}>·</Text>
@@ -331,6 +300,14 @@ export default function ProfileScreen({ navigation }: Props) {
 
       {loading ? (
         <ActivityIndicator color={THEME.colors.primary} style={{ marginVertical: 16 }} />
+      ) : activities.length === 0 ? (
+        <View style={styles.emptySkillBox}>
+          <Text style={styles.emptySkillIcon}>🎯</Text>
+          <Text style={styles.emptySkillTitle}>Belum Ada Rekam Skill Rating</Text>
+          <Text style={styles.emptySkillSubtitle}>
+            Ikuti sesi mabar dan selesaikan pertandingan untuk mendapatkan rating dan feedback dari pemain lain.
+          </Text>
+        </View>
       ) : (
         <View style={styles.skillList}>
           {activities.map((act) => (
@@ -646,6 +623,35 @@ const styles = StyleSheet.create({
   skillList: {
     gap: 8,
     marginBottom: 10
+  },
+  emptySkillBox: {
+    backgroundColor: THEME.colors.card,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12
+  },
+  emptySkillIcon: {
+    fontSize: 24,
+    marginBottom: 6
+  },
+  emptySkillTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 12,
+    color: THEME.colors.text,
+    includeFontPadding: false,
+    marginBottom: 4
+  },
+  emptySkillSubtitle: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 10,
+    color: THEME.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 15,
+    includeFontPadding: false
   },
   skillCard: {
     backgroundColor: THEME.colors.card,

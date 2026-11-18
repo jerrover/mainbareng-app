@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import AuthScreen from '../screens/AuthScreen';
 import TabNavigator from './TabNavigator';
+import LobbyScreen from '../screens/LobbyScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -24,6 +25,7 @@ export default function RootNavigator() {
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="Auth" component={AuthScreen} />
       <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen name="Lobby" component={LobbyScreen} />
     </Stack.Navigator>
   );
 }

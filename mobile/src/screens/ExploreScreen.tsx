@@ -9,15 +9,14 @@ import {
   ActivityIndicator,
   RefreshControl
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../theme';
-import { MainTabParamList } from '../navigation/types';
+import { MainTabScreenProps } from '../navigation/types';
 import { api, ApiSession } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 
-type Props = BottomTabScreenProps<MainTabParamList, 'Explore'>;
+type Props = MainTabScreenProps<'Explore'>;
 
 interface UserProfileHeader {
   fullName: string;
@@ -204,6 +203,8 @@ function getActivityBadgeLabel(activityType: string = ''): string {
 
 export default function ExploreScreen({ navigation }: Props) {
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = 24;
 
   // Dynamic user profile state
   const [profile, setProfile] = useState<UserProfileHeader>({
@@ -421,7 +422,7 @@ export default function ExploreScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -450,19 +451,6 @@ export default function ExploreScreen({ navigation }: Props) {
               ⚡ {profile.creditScore} {profile.tier}
             </Text>
           </View>
-        </View>
-
-        {/* Live Database Indicator Badge */}
-        <View style={styles.liveIndicatorRow}>
-          <View
-            style={[
-              styles.liveDot,
-              { backgroundColor: isLiveConnected ? THEME.colors.success : THEME.colors.warning }
-            ]}
-          />
-          <Text style={styles.liveIndicatorText}>
-            {isLiveConnected ? 'Online' : 'Offline Mode (Fallback Data)'}
-          </Text>
         </View>
 
         {/* Search & Filter Bar */}
@@ -578,9 +566,9 @@ export default function ExploreScreen({ navigation }: Props) {
 
         {/* Section Header */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionHeaderTitle}>SESI AKTIF DATABASE</Text>
+          <Text style={styles.sectionHeaderTitle}>SESI TERDEKAT DISEKITARMU</Text>
           <Text style={styles.sectionHeaderMeta}>
-            {filteredSessions.length} Sesi Ditemukan
+            {filteredSessions.length} Sesi Tersedia
           </Text>
         </View>
 
@@ -588,7 +576,7 @@ export default function ExploreScreen({ navigation }: Props) {
         {isLoading && !isRefreshing && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={THEME.colors.primary} />
-            <Text style={styles.loadingText}>Fetching Data, please wait...</Text>
+            <Text style={styles.loadingText}>Memuat sesi mabar...</Text>
           </View>
         )}
 
@@ -1153,8 +1141,8 @@ const styles = StyleSheet.create({
   kickoffBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 72,
-    paddingRight: 8
+    minWidth: 78,
+    paddingRight: 6
   },
   kickoffEyebrow: {
     fontFamily: THEME.typography.fonts.bold,
@@ -1165,7 +1153,7 @@ const styles = StyleSheet.create({
   },
   kickoffTime: {
     fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 22,
+    fontSize: 18,
     color: THEME.colors.text,
     marginVertical: 2,
     includeFontPadding: false

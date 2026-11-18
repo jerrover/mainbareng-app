@@ -11,7 +11,7 @@ import {
   ScrollView
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../theme';
 import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../services/supabase';
@@ -21,6 +21,7 @@ import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
 export default function AuthScreen({ route, navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const initialMode = route?.params?.initialMode;
   const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [fullName, setFullName] = useState('');
@@ -198,7 +199,13 @@ export default function AuthScreen({ route, navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top + 8, 16),
+            paddingBottom: Math.max(insets.bottom + 16, 32)
+          }
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -346,7 +353,7 @@ export default function AuthScreen({ route, navigation }: Props) {
           {/* Legal Disclaimer */}
           <Text style={styles.legalText}>
             Dengan masuk atau mendaftar, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi
-            Mabar (IF670 UMN).
+            Mabar (MainBareng).
           </Text>
         </View>
       </ScrollView>

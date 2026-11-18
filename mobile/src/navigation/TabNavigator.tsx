@@ -10,7 +10,7 @@ import { MainTabParamList } from './types';
 
 import ExploreScreen from '../screens/ExploreScreen';
 import CreateSessionScreen from '../screens/CreateSessionScreen';
-import LobbyScreen from '../screens/LobbyScreen';
+import MySessionsScreen from '../screens/MySessionsScreen';
 import VenuesScreen from '../screens/VenuesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
@@ -37,12 +37,22 @@ function CenterActionButton({ onPress }: BottomTabBarButtonProps) {
 }
 
 export default function TabNavigator() {
+  const insets = useSafeAreaInsets();
+  // Safe area bottom inset untuk navbar Android (3 tombol / gesture pill)
+  const safeBottom = Math.max(insets.bottom, 8);
+
   return (
     <Tab.Navigator
       initialRouteName="Explore"
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBarCapsule,
+        tabBarStyle: [
+          styles.tabBarFullWidth,
+          {
+            paddingBottom: safeBottom,
+            height: 60 + safeBottom
+          }
+        ],
         tabBarActiveTintColor: THEME.colors.primary,
         tabBarInactiveTintColor: THEME.colors.textMuted,
         tabBarLabelStyle: styles.tabBarLabel,
@@ -61,10 +71,10 @@ export default function TabNavigator() {
         }}
       />
 
-      {/* 2. Sesi Saya / Lobby (Figma 31:10371) */}
+      {/* 2. Sesi Saya (Figma 35:1543 · SCR-17) */}
       <Tab.Screen
-        name="Lobby"
-        component={LobbyScreen}
+        name="MySessions"
+        component={MySessionsScreen}
         options={{
           tabBarLabel: 'Sesi Saya',
           tabBarIcon: ({ color }) => (
@@ -111,28 +121,21 @@ export default function TabNavigator() {
 }
 
 const styles = StyleSheet.create({
-  // Floating Capsule Nav (Figma 31:10365)
-  tabBarCapsule: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-    height: 64,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+  // Full-Width Glass Dock (Linear / Strava style)
+  tabBarFullWidth: {
+    backgroundColor: THEME.colors.card, // #12141A
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.border, // rgba(255, 255, 255, 0.08) hairline
     paddingHorizontal: 8,
-    paddingBottom: 6,
     paddingTop: 6,
     elevation: 8,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.35,
-    shadowRadius: 12
+    shadowRadius: 8
   },
   tabBarItem: {
-    height: 52,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center'
   },
@@ -146,18 +149,20 @@ const styles = StyleSheet.create({
     fontSize: 18
   },
 
-  // Center Action Button FAB (Figma 31:10378 - Perfectly Centered)
+  // Center Action Button FAB (Sleek circular Neon Volt hero button)
   centerFabContainer: {
     flex: 1,
-    top: -14,
+    top: -8,
     alignItems: 'center',
     justifyContent: 'center'
   },
   centerFab: {
-    width: THEME.components.fabButton.width,
-    height: THEME.components.fabButton.height,
+    width: 44,
+    height: 44,
     borderRadius: THEME.radius.full,
     backgroundColor: THEME.colors.primary,
+    borderWidth: 3,
+    borderColor: THEME.colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 6,
@@ -174,7 +179,7 @@ const styles = StyleSheet.create({
   },
   plusBarHorizontal: {
     position: 'absolute',
-    width: 16,
+    width: 14,
     height: 2.5,
     borderRadius: 1.5,
     backgroundColor: THEME.colors.textOnPrimary
@@ -182,7 +187,7 @@ const styles = StyleSheet.create({
   plusBarVertical: {
     position: 'absolute',
     width: 2.5,
-    height: 16,
+    height: 14,
     borderRadius: 1.5,
     backgroundColor: THEME.colors.textOnPrimary
   }
