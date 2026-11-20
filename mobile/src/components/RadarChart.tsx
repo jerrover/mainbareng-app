@@ -29,14 +29,14 @@ export const getPointGrade = (val: number): { grade: 'S' | 'A' | 'B' | 'C' | 'D'
 
 export default function RadarChart({
   data,
-  size = 270,
+  size = 280,
   maxValue = 100,
   levels = 4,
   accentColor = THEME.colors.primary,
   onPressPoint,
 }: RadarChartProps) {
   const center = size / 2;
-  const radius = size * 0.28; // ruang lega untuk circular badge & title luar
+  const radius = size * 0.26; // 72.8px pada size 280, memberi ruang lega untuk badge & title luar
   const totalPoints = data.length;
 
   if (totalPoints < 3) {
@@ -104,20 +104,57 @@ export default function RadarChart({
     .join(' ');
 
   // 4. Circular Grade Badges & Axis Titles (Aesthetic mirip game TFT / Esports)
+  // Diposisikan dengan vertical stacking terpisah agar teks tidak menabrak badge
   const axisElements = data.map((item, i) => {
-    const badgeCoord = getCoordinates(maxValue * 1.24, i);
-    const titleCoord = getCoordinates(maxValue * 1.58, i);
+    const vCoord = getCoordinates(maxValue, i);
     const pointGrade = getPointGrade(item.value);
+
+    let bx = vCoord.x;
+    let by = vCoord.y;
+    let tx = vCoord.x;
+    let ty = vCoord.y;
+
+    if (i === 0) {
+      // Puncak (Top): Teamwork
+      bx = center;
+      by = vCoord.y - 13;
+      tx = center;
+      ty = vCoord.y - 28;
+    } else if (i === 1) {
+      // Kanan Atas (Top-Right): Fair Play
+      bx = vCoord.x + 22;
+      by = vCoord.y + 4;
+      tx = vCoord.x + 22;
+      ty = vCoord.y - 14;
+    } else if (i === 2) {
+      // Kanan Bawah (Bottom-Right): Reliability
+      bx = vCoord.x + 10;
+      by = vCoord.y + 15;
+      tx = vCoord.x + 10;
+      ty = vCoord.y + 36;
+    } else if (i === 3) {
+      // Kiri Bawah (Bottom-Left): Experience
+      bx = vCoord.x - 10;
+      by = vCoord.y + 15;
+      tx = vCoord.x - 10;
+      ty = vCoord.y + 36;
+    } else if (i === 4) {
+      // Kiri Atas (Top-Left): Skill Fit
+      bx = vCoord.x - 22;
+      by = vCoord.y + 4;
+      tx = vCoord.x - 22;
+      ty = vCoord.y - 14;
+    }
 
     return (
       <G
         key={`axis-elem-${item.key}`}
         onPress={() => onPressPoint && onPressPoint(item)}
       >
-        {/* Title Sumbu */}
+        {/* Title Sumbu (Vertikal terpisah, tidak akan menabrak badge) */}
         <SvgText
-          x={titleCoord.x}
-          y={titleCoord.y + 3}
+          x={tx}
+          y={ty}
           fill={THEME.colors.textSecondary}
           fontSize="10"
           fontWeight="bold"
@@ -129,16 +166,16 @@ export default function RadarChart({
 
         {/* Circular Badge Grade (S/A/B/C/D) */}
         <Circle
-          cx={badgeCoord.x}
-          cy={badgeCoord.y}
+          cx={bx}
+          cy={by}
           r="9.5"
           stroke={pointGrade.color}
           strokeWidth="1.6"
-          fill="rgba(15, 20, 25, 0.90)"
+          fill="rgba(15, 20, 25, 0.92)"
         />
         <SvgText
-          x={badgeCoord.x}
-          y={badgeCoord.y + 3.5}
+          x={bx}
+          y={by + 3.5}
           fill={pointGrade.color}
           fontSize="9.5"
           fontWeight="bold"
@@ -151,9 +188,11 @@ export default function RadarChart({
     );
   });
 
+  const chartHeight = 250;
+
   return (
     <View style={styles.chartWrapper}>
-      <Svg height={size} width={size} viewBox={`0 0 ${size} ${size}`}>
+      <Svg height={chartHeight} width={size} viewBox={`0 10 ${size} ${chartHeight}`}>
         {/* Cincin Grid */}
         {gridRings}
 

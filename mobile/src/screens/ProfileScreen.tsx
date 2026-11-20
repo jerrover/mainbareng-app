@@ -396,7 +396,7 @@ export default function ProfileScreen({ navigation }: Props) {
         {ovrProfile?.radar ? (
           <RadarChart
             data={ovrProfile.radar}
-            size={260}
+            size={280}
             accentColor={getGradeColor(ovrProfile?.grade)}
             onPressPoint={(pt) =>
               showAlert(
