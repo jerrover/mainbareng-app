@@ -16,6 +16,22 @@ export interface ApiProfile {
   updated_at: string;
 }
 
+export interface ApiOvrRadarItem {
+  key: string;
+  label: string;
+  name: string;
+  value: number;
+}
+
+export interface ApiOvrProfile {
+  ovr: number;
+  grade: 'S' | 'A' | 'B' | 'C' | 'D';
+  is_calibrated: boolean;
+  matches_played: number;
+  total_reviews: number;
+  radar: ApiOvrRadarItem[];
+}
+
 export interface ApiVenue {
   id: string;
   name: string;
@@ -262,5 +278,33 @@ export const api = {
       throw new Error(json.message || json.error || 'Gagal mengirim penilaian');
     }
     return json.data;
+  },
+
+  async getMyOvr(): Promise<ApiOvrProfile | null> {
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`${BASE_URL}/api/profile/me/ovr`, {
+        headers: authHeaders
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.ovr_profile || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async getPlayerOvr(userId: string): Promise<ApiOvrProfile | null> {
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`${BASE_URL}/api/profile/${userId}/ovr`, {
+        headers: authHeaders
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.ovr_profile || null;
+    } catch {
+      return null;
+    }
   }
 };
