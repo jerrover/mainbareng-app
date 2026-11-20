@@ -43,7 +43,7 @@ export default function RadarChart({
   onPressPoint,
 }: RadarChartProps) {
   const center = size / 2;
-  const radius = size * 0.26; // 72.8px pada size 280, memberi ruang lega untuk badge & title luar
+  const radius = 68; // Jari-jari pentagon luar, proporsional memberi ruang nafas luar
   const totalPoints = data.length;
 
   if (totalPoints < 3) {
@@ -111,47 +111,27 @@ export default function RadarChart({
     .join(' ');
 
   // 4. Circular Grade Badges & Axis Titles (Aesthetic mirip game TFT / Esports)
-  // Diposisikan dengan vertical stacking terpisah agar teks tidak menabrak badge
+  // Jarak / gap dari tiap ujung lancip pentagon ke lingkaran badge dihitung seragam secara matematis
+  const BADGE_RADIUS = 11.5;
+  const BADGE_GAP = 14.0; // Gap seragam persis 14px dari lancip pentagon ke tepi lingkaran badge di semua sumbu
+  const DIST_TO_BADGE_CENTER = radius + BADGE_GAP + BADGE_RADIUS;
+
   const axisElements = data.map((item, i) => {
-    const vCoord = getCoordinates(maxValue, i);
+    const angle = i * angleSlice - Math.PI / 2;
+    const cosAngle = Math.cos(angle);
+    const sinAngle = Math.sin(angle);
+
+    // Titik pusat badge dihitung seragam sepanjang vektor sudut radial masing-masing
+    const bx = center + DIST_TO_BADGE_CENTER * cosAngle;
+    const by = center + DIST_TO_BADGE_CENTER * sinAngle;
+
     const pointGrade = getPointGrade(item.value);
 
-    let bx = vCoord.x;
-    let by = vCoord.y;
-    let tx = vCoord.x;
-    let ty = vCoord.y;
-
-    if (i === 0) {
-      // Puncak (Top): Teamwork
-      bx = center;
-      by = vCoord.y - 13;
-      tx = center;
-      ty = vCoord.y - 28;
-    } else if (i === 1) {
-      // Kanan Atas (Top-Right): Fair Play
-      bx = vCoord.x + 22;
-      by = vCoord.y + 4;
-      tx = vCoord.x + 22;
-      ty = vCoord.y - 14;
-    } else if (i === 2) {
-      // Kanan Bawah (Bottom-Right): Reliability
-      bx = vCoord.x + 10;
-      by = vCoord.y + 15;
-      tx = vCoord.x + 10;
-      ty = vCoord.y + 36;
-    } else if (i === 3) {
-      // Kiri Bawah (Bottom-Left): Experience
-      bx = vCoord.x - 10;
-      by = vCoord.y + 15;
-      tx = vCoord.x - 10;
-      ty = vCoord.y + 36;
-    } else if (i === 4) {
-      // Kiri Atas (Top-Left): Skill Fit
-      bx = vCoord.x - 22;
-      by = vCoord.y + 4;
-      tx = vCoord.x - 22;
-      ty = vCoord.y - 14;
-    }
+    // Title sumbu: di atas badge untuk paruh atas (i = 0, 1, 4), di bawah badge untuk paruh bawah (i = 2, 3)
+    const tx = bx;
+    const ty = (i === 0 || i === 1 || i === 4)
+      ? by - BADGE_RADIUS - 6
+      : by + BADGE_RADIUS + 15;
 
     return (
       <G
@@ -175,7 +155,7 @@ export default function RadarChart({
         <Circle
           cx={bx}
           cy={by}
-          r="11.5"
+          r={BADGE_RADIUS}
           stroke={pointGrade.color}
           strokeWidth="1.5"
           fill="rgba(15, 20, 25, 0.94)"
@@ -195,11 +175,11 @@ export default function RadarChart({
     );
   });
 
-  const chartHeight = 250;
+  const chartHeight = 255;
 
   return (
     <View style={styles.chartWrapper}>
-      <Svg height={chartHeight} width={size} viewBox={`0 10 ${size} ${chartHeight}`}>
+      <Svg height={chartHeight} width={size} viewBox={`0 10 ${size} ${chartHeight - 10}`}>
         {/* Cincin Grid */}
         {gridRings}
 
