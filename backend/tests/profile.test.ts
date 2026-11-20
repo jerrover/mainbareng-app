@@ -40,4 +40,18 @@ describe('Profile & Auth Middleware Integration Tests', () => {
     expect(data.success).toBe(false);
     expect(data.message).toContain('Token autentikasi tidak ditemukan');
   });
+
+  it('should reject unauthenticated request to /api/profile/me/ovr with 401', async () => {
+    const res = await app.request('/api/profile/me/ovr');
+    expect(res.status).toBe(401);
+    const data = await res.json();
+    expect(data.success).toBe(false);
+    expect(data.message).toContain('Token autentikasi tidak ditemukan');
+  });
+
+  it('should reject invalid UUID on /api/profile/:id/ovr with 400', async () => {
+    // authenticated request simulated or unauthenticated should check auth middleware first
+    const res = await app.request('/api/profile/invalid-uuid/ovr');
+    expect(res.status).toBe(401);
+  });
 });

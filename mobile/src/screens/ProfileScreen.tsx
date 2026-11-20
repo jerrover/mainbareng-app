@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -16,6 +17,8 @@ import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../services/supabase';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
+import RadarChart, { RadarDataPoint, getPointGrade } from '../components/RadarChart';
+import { api, ApiOvrProfile } from '../services/api';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Profile'>,
@@ -46,6 +49,7 @@ export default function ProfileScreen({ navigation }: Props) {
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [ovrProfile, setOvrProfile] = useState<ApiOvrProfile | null>(null);
 
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
@@ -150,6 +154,34 @@ export default function ProfileScreen({ navigation }: Props) {
         } else {
           setActivities([]);
         }
+
+        // Fetch OVR profile from backend API
+        try {
+          const ovrRes = await api.getMyOvr();
+          if (ovrRes) {
+            setOvrProfile(ovrRes);
+          } else {
+            // Calibrated fallback
+            const completed = data?.total_sessions_completed ?? 0;
+            const exp = Math.min(100, Math.round(30 + Math.sqrt(completed) * 15.65));
+            setOvrProfile({
+              ovr: 75,
+              grade: 'B',
+              is_calibrated: completed >= 3,
+              matches_played: completed,
+              total_reviews: 0,
+              radar: [
+                { key: 'teamwork', label: 'TMW', name: 'Teamwork', value: 75 },
+                { key: 'fair_play', label: 'FRP', name: 'Fair Play', value: 80 },
+                { key: 'reliability', label: 'REL', name: 'Reliability', value: data?.credit_score ?? 100 },
+                { key: 'experience', label: 'EXP', name: 'Experience', value: exp },
+                { key: 'skill_fit', label: 'SKL', name: 'Skill Fit', value: 75 }
+              ]
+            });
+          }
+        } catch (ovrErr) {
+          console.warn('[ProfileScreen] Fetch OVR error:', ovrErr);
+        }
       } catch (err) {
         console.warn('[ProfileScreen] Unexpected error:', err);
       } finally {
@@ -181,6 +213,40 @@ export default function ProfileScreen({ navigation }: Props) {
       return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     }
     return name.slice(0, 2).toUpperCase();
+  };
+
+  const getGradeColor = (grade?: string) => {
+    switch (grade) {
+      case 'S':
+        return THEME.colors.primary;
+      case 'A':
+        return '#38BDF8';
+      case 'B':
+        return '#A3E635';
+      case 'C':
+        return THEME.colors.warning;
+      case 'D':
+        return THEME.colors.danger;
+      default:
+        return THEME.colors.primary;
+    }
+  };
+
+  const getPillarDescription = (key: string, value: number) => {
+    switch (key) {
+      case 'teamwork':
+        return `Skor Kerjasama Tim (${value}/100): Mengukur kekompakan, unselfish play, dan koordinasi dengan rekan setim di lapangan.`;
+      case 'fair_play':
+        return `Skor Sportivitas (${value}/100): Dihitung dari akumulasi review sportivitas sesama pemain di lapangan.`;
+      case 'reliability':
+        return `Skor Keandalan (${value}/100): Terikat langsung dengan Credit Score kamu, menjamin kamu tidak pernah ghosting slot.`;
+      case 'experience':
+        return `Skor Jam Terbang (${value}/100): Mengukur konsistensi dan jumlah sesi pertandingan yang berhasil kamu selesaikan.`;
+      case 'skill_fit':
+        return `Kecocokan Skill (${value}/100): Evaluasi kesesuaian tingkat kemahiran teknis agar tim tetap seimbang.`;
+      default:
+        return `Skor atribut: ${value}/100`;
+    }
   };
 
   // Guest Mode View
@@ -260,9 +326,149 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={styles.ovrBadge}>
-          <Text style={styles.ovrNumber}>74</Text>
-          <Text style={styles.ovrLabel}>OVR</Text>
+        <TouchableOpacity
+          style={[
+            styles.ovrBadge,
+            { borderColor: getGradeColor(ovrProfile?.grade) }
+          ]}
+          onPress={() =>
+            showAlert(
+              `Status OVR: ${ovrProfile?.ovr ?? 75} (${ovrProfile?.grade ?? 'B'})`,
+              `Overall Rating dihitung dari 5 pilar: Teamwork, Fair Play, Reliability, Experience, dan Skill Fit.${
+                ovrProfile?.is_calibrated
+                  ? ' Profil Anda telah terkalibrasi penuh.'
+                  : ' Profil dalam fase kalibrasi (butuh min. 3 pertandingan).'
+              }`,
+              'info'
+            )
+          }
+        >
+          <Text
+            style={[
+              styles.ovrNumber,
+              { color: getGradeColor(ovrProfile?.grade) }
+            ]}
+          >
+            {ovrProfile?.ovr ?? 74}
+          </Text>
+          <Text style={styles.ovrLabel}>OVR · {ovrProfile?.grade ?? 'B'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Section: OVR Radar Profiling */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>PROFIL ATLET & RADAR STATS</Text>
+        <Text style={styles.sectionSubtitle}>
+          {ovrProfile?.is_calibrated ? 'Terkalibrasi Penuh' : 'Fase Kalibrasi (3 Match)'}
+        </Text>
+      </View>
+
+      <View style={styles.radarCard}>
+        <View style={styles.radarHeaderRow}>
+          <View style={styles.radarBadgeRow}>
+            <View
+              style={[
+                styles.tierTag,
+                { borderColor: getGradeColor(ovrProfile?.grade) }
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tierTagText,
+                  { color: getGradeColor(ovrProfile?.grade) }
+                ]}
+              >
+                TIER {ovrProfile?.grade ?? 'B'}
+              </Text>
+            </View>
+            <Text style={styles.radarHeaderOvr}>
+              {ovrProfile?.ovr ?? 74}{' '}
+              <Text style={styles.radarHeaderOvrUnit}>OVR</Text>
+            </Text>
+          </View>
+
+          <View style={styles.calibrationTag}>
+            <Text style={styles.calibrationTagText}>
+              {ovrProfile?.is_calibrated ? '✓ Terverifikasi' : '⚡ Kalibrasi'}
+            </Text>
+          </View>
+        </View>
+
+        {ovrProfile?.radar ? (
+          <RadarChart
+            data={ovrProfile.radar}
+            size={280}
+            accentColor={getGradeColor(ovrProfile?.grade)}
+            onPressPoint={(pt) =>
+              showAlert(
+                `${pt.name} (${pt.label}): ${pt.value} / 100`,
+                getPillarDescription(pt.key, pt.value),
+                'info'
+              )
+            }
+          />
+        ) : (
+          <ActivityIndicator color={THEME.colors.primary} style={{ marginVertical: 32 }} />
+        )}
+
+        {/* Match Performance Snapshot (Ala Esports / Reference Image) */}
+        <View style={styles.radarStatsGrid}>
+          <View style={styles.radarStatCol}>
+            <Text style={styles.radarStatValue}>{totalSessions}</Text>
+            <Text style={styles.radarStatLabel}>Sesi Main</Text>
+          </View>
+          <View style={styles.radarStatDivider} />
+          <View style={styles.radarStatCol}>
+            <Text style={styles.radarStatValue}>{showUpRate}</Text>
+            <Text style={styles.radarStatLabel}>Kehadiran</Text>
+          </View>
+          <View style={styles.radarStatDivider} />
+          <View style={styles.radarStatCol}>
+            <Text style={[styles.radarStatValue, { color: THEME.colors.primary }]}>{creditScore}</Text>
+            <Text style={styles.radarStatLabel}>Credit Score</Text>
+          </View>
+          <View style={styles.radarStatDivider} />
+          <View style={styles.radarStatCol}>
+            <Text style={styles.radarStatValue}>{totalSessions * 2}h</Text>
+            <Text style={styles.radarStatLabel}>Jam Terbang</Text>
+          </View>
+        </View>
+
+        <View style={styles.radarPillsGrid}>
+          {ovrProfile?.radar.map((r) => {
+            const pointGrade = getPointGrade(r.value);
+            return (
+              <TouchableOpacity
+                key={r.key}
+                style={[
+                  styles.radarPillItem,
+                  { borderColor: `${pointGrade.color}40` }
+                ]}
+                onPress={() =>
+                  showAlert(
+                    `${r.name} (${r.label}): ${r.value} / 100`,
+                    getPillarDescription(r.key, r.value),
+                    'info'
+                  )
+                }
+              >
+                <View style={styles.radarPillGradeBadge}>
+                  <Text style={[styles.radarPillGradeText, { color: pointGrade.color }]}>
+                    {pointGrade.grade}
+                  </Text>
+                </View>
+                <Text style={styles.radarPillLabel}>{r.label}</Text>
+                <Text
+                  style={[
+                    styles.radarPillValue,
+                    { color: pointGrade.color }
+                  ]}
+                >
+                  {r.value}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -599,6 +805,138 @@ const styles = StyleSheet.create({
     fontFamily: THEME.typography.fonts.semiBold,
     fontSize: 10,
     color: THEME.colors.accent,
+    includeFontPadding: false
+  },
+  radarCard: {
+    backgroundColor: THEME.colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    padding: 14,
+    marginBottom: 16
+  },
+  radarHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  radarBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  tierTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: 'rgba(213, 255, 64, 0.08)'
+  },
+  tierTagText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    includeFontPadding: false
+  },
+  radarHeaderOvr: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 20,
+    color: THEME.colors.text,
+    includeFontPadding: false
+  },
+  radarHeaderOvrUnit: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textMuted
+  },
+  calibrationTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    backgroundColor: THEME.colors.cardElevated,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder
+  },
+  calibrationTagText: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 10,
+    color: THEME.colors.textSecondary,
+    includeFontPadding: false
+  },
+  radarStatsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: THEME.colors.cardElevated,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginVertical: 10
+  },
+  radarStatCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2
+  },
+  radarStatValue: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 13,
+    color: THEME.colors.text,
+    includeFontPadding: false
+  },
+  radarStatLabel: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 9,
+    color: THEME.colors.textMuted,
+    includeFontPadding: false
+  },
+  radarStatDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: THEME.colors.cardBorder
+  },
+  radarPillsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginTop: 2
+  },
+  radarPillItem: {
+    flex: 1,
+    backgroundColor: THEME.colors.cardElevated,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    gap: 2
+  },
+  radarPillGradeBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  radarPillGradeText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
+    fontWeight: '700',
+    fontSize: 9.5,
+    includeFontPadding: false
+  },
+  radarPillLabel: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 9,
+    color: THEME.colors.textMuted,
+    includeFontPadding: false
+  },
+  radarPillValue: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 12,
     includeFontPadding: false
   },
   sectionHeaderRow: {
