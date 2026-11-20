@@ -18,3 +18,6 @@ export type { CustomAlertModalProps, AlertType } from './CustomAlertModal';
 
 export { default as RatingModal } from './RatingModal';
 export type { RatingModalProps } from './RatingModal';
+
+export { default as RadarChart } from './RadarChart';
+export type { RadarDataPoint } from './RadarChart';
