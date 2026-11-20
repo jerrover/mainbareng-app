@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { supabase } from '../db/supabase';
 import { authMiddleware, AuthVariables } from '../middleware/auth';
+import { calculateOvrProfile } from '../services/ovrCalculator';
 
 export const profileRouter = new Hono<{ Variables: AuthVariables }>();
 
@@ -220,6 +221,106 @@ profileRouter.get('/me/credit-history', async (c) => {
       {
         success: false,
         message: 'Gagal mengambil riwayat Credit Score',
+        error: err.message
+      },
+      500
+    );
+  }
+});
+
+// GET /api/profile/me/ovr - Get current user's OVR and 5-axis radar profile
+profileRouter.get('/me/ovr', async (c) => {
+  const user = c.get('user');
+
+  try {
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('credit_score, total_sessions_completed, show_up_rate')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileErr) throw profileErr;
+
+    const [reviewsRes, activitiesRes] = await Promise.all([
+      supabase
+        .from('peer_reviews')
+        .select('attendance, sportsmanship, level_fit, notes')
+        .eq('target_user_id', user.id),
+      supabase
+        .from('user_activity_profiles')
+        .select('activity_type, skill_rating_level, skill_rating_points')
+        .eq('user_id', user.id)
+    ]);
+
+    if (reviewsRes.error) throw reviewsRes.error;
+    if (activitiesRes.error) throw activitiesRes.error;
+
+    const ovrResult = calculateOvrProfile(
+      profile || { credit_score: 100, total_sessions_completed: 0 },
+      reviewsRes.data || [],
+      activitiesRes.data || []
+    );
+
+    return c.json({ success: true, ovr_profile: ovrResult });
+  } catch (err: any) {
+    return c.json(
+      {
+        success: false,
+        message: 'Gagal menghitung profil OVR pengguna',
+        error: err.message
+      },
+      500
+    );
+  }
+});
+
+// GET /api/profile/:id/ovr - Get another player's OVR and 5-axis radar profile
+profileRouter.get('/:id/ovr', async (c) => {
+  const targetId = c.req.param('id');
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (!uuidRegex.test(targetId)) {
+    return c.json({ success: false, message: 'Format ID profil tidak valid' }, 400);
+  }
+
+  try {
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('credit_score, total_sessions_completed, show_up_rate')
+      .eq('id', targetId)
+      .maybeSingle();
+
+    if (profileErr) throw profileErr;
+    if (!profile) {
+      return c.json({ success: false, message: 'Profil pengguna tidak ditemukan' }, 404);
+    }
+
+    const [reviewsRes, activitiesRes] = await Promise.all([
+      supabase
+        .from('peer_reviews')
+        .select('attendance, sportsmanship, level_fit, notes')
+        .eq('target_user_id', targetId),
+      supabase
+        .from('user_activity_profiles')
+        .select('activity_type, skill_rating_level, skill_rating_points')
+        .eq('user_id', targetId)
+    ]);
+
+    if (reviewsRes.error) throw reviewsRes.error;
+    if (activitiesRes.error) throw activitiesRes.error;
+
+    const ovrResult = calculateOvrProfile(
+      profile,
+      reviewsRes.data || [],
+      activitiesRes.data || []
+    );
+
+    return c.json({ success: true, ovr_profile: ovrResult });
+  } catch (err: any) {
+    return c.json(
+      {
+        success: false,
+        message: 'Gagal mengambil profil OVR pemain',
         error: err.message
       },
       500
