@@ -1,7 +1,14 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import Svg, { Polygon, Line, Circle, Text as SvgText, G } from 'react-native-svg';
 import { THEME } from '../theme';
+
+// Font dengan counter lebar (open aperture) khusus grade A, B, C, D, S agar tidak blur/bloated di layar kecil
+const GRADE_FONT = Platform.select({
+  ios: 'Helvetica Neue',
+  android: 'sans-serif-medium',
+  default: 'sans-serif',
+});
 
 export interface RadarDataPoint {
   key: string;
@@ -164,22 +171,22 @@ export default function RadarChart({
           {item.name}
         </SvgText>
 
-        {/* Circular Badge Grade (S/A/B/C/D) */}
+        {/* Circular Badge Grade (S/A/B/C/D) dengan diameter lebih lega & font bersih */}
         <Circle
           cx={bx}
           cy={by}
-          r="9.5"
+          r="11.5"
           stroke={pointGrade.color}
-          strokeWidth="1.6"
-          fill="rgba(15, 20, 25, 0.92)"
+          strokeWidth="1.5"
+          fill="rgba(15, 20, 25, 0.94)"
         />
         <SvgText
           x={bx}
-          y={by + 3.5}
+          y={by + 4}
           fill={pointGrade.color}
-          fontSize="9.5"
+          fontSize="11"
           fontWeight="bold"
-          fontFamily={THEME.typography.fonts.bold}
+          fontFamily={GRADE_FONT}
           textAnchor="middle"
         >
           {pointGrade.grade}
