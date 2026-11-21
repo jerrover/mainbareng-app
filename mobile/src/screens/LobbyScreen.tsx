@@ -8,8 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Share,
-  Linking,
-  Alert
+  Linking
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../theme';
@@ -103,13 +102,18 @@ export default function LobbyScreen({ route, navigation }: Props) {
 
   const [activeTeamTab, setActiveTeamTab] = useState<'all' | 'A' | 'B'>('all');
 
-  // Custom Alert Modal State
+  // Custom Bento Alert & Action Sheet State
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
     type: AlertType;
     title: string;
     message: string;
+    contextBadge?: string;
     primaryButtonText?: string;
+    secondaryButtonText?: string;
+    onPrimaryPress?: () => void;
+    onSecondaryPress?: () => void;
+    isLoading?: boolean;
   }>({
     visible: false,
     type: 'info',
@@ -121,14 +125,39 @@ export default function LobbyScreen({ route, navigation }: Props) {
     type: AlertType,
     title: string,
     message: string,
-    primaryButtonText = 'Mengerti'
+    primaryButtonText = 'Mengerti',
+    contextBadge?: string
   ) => {
     setAlertConfig({
       visible: true,
       type,
       title,
       message,
-      primaryButtonText
+      contextBadge,
+      primaryButtonText,
+      onPrimaryPress: closeAlert
+    });
+  };
+
+  const showConfirm = (params: {
+    type?: AlertType;
+    title: string;
+    message: string;
+    contextBadge?: string;
+    primaryButtonText: string;
+    secondaryButtonText?: string;
+    onConfirm: () => void | Promise<void>;
+  }) => {
+    setAlertConfig({
+      visible: true,
+      type: params.type || 'warning',
+      title: params.title,
+      message: params.message,
+      contextBadge: params.contextBadge,
+      primaryButtonText: params.primaryButtonText,
+      secondaryButtonText: params.secondaryButtonText || 'Batal',
+      onPrimaryPress: params.onConfirm,
+      onSecondaryPress: closeAlert
     });
   };
 
@@ -473,42 +502,42 @@ export default function LobbyScreen({ route, navigation }: Props) {
       return;
     }
 
-    Alert.alert(
-      'Batalkan Keikutsertaan? ⚠️',
-      `Slot #${myParticipant?.slot || ''} Anda akan dilepas ke pemain lain dan pembagian tim akan di-reset. Yakin ingin membatalkan slot ini?`,
-      [
-        { text: 'Tetap Ikut', style: 'cancel' },
-        {
-          text: 'Ya, Batalkan Slot',
-          style: 'destructive',
-          onPress: async () => {
-            if (!user) return;
+    const slotLabel = myParticipant?.slot ? `Slot #${myParticipant.slot}` : 'Slot Anda';
 
-            if (!currentSession?.id) {
-              // Local fallback
-              setParticipants(participants.filter((p) => p.userId !== user.id));
-              showAlert('success', 'Slot Dibatalkan', 'Anda telah keluar dari sesi mabar ini.');
-              return;
-            }
+    showConfirm({
+      type: 'warning',
+      title: 'Batalkan Keikutsertaan?',
+      message: `${slotLabel} akan dilepas kembali ke publik. Susunan tim dan alokasi slot akan di-reset.`,
+      contextBadge: `⚠️ ${slotLabel} Akan Dikosongkan`,
+      primaryButtonText: 'Ya, Batalkan Slot',
+      secondaryButtonText: 'Tetap Ikut di Sesi Ini',
+      onConfirm: async () => {
+        closeAlert();
+        if (!user) return;
 
-            setIsLeaving(true);
-            try {
-              const res = await api.leaveSession(currentSession.id, user.id);
-              showAlert(
-                'success',
-                'Slot Berhasil Dibatalkan',
-                `Slot #${res.released_slot} telah dilepas kembali.`
-              );
-              await loadSessionAndRoster(false);
-            } catch (err: any) {
-              showAlert('error', 'Gagal Membatalkan Slot', err.message || 'Tidak dapat membatalkan slot.');
-            } finally {
-              setIsLeaving(false);
-            }
-          }
+        if (!currentSession?.id) {
+          // Local fallback
+          setParticipants(participants.filter((p) => p.userId !== user.id));
+          showAlert('success', 'Slot Dibatalkan', 'Anda telah keluar dari sesi mabar ini.');
+          return;
         }
-      ]
-    );
+
+        setIsLeaving(true);
+        try {
+          const res = await api.leaveSession(currentSession.id, user.id);
+          showAlert(
+            'success',
+            'Slot Berhasil Dibatalkan',
+            `Slot #${res.released_slot} telah dilepas kembali.`
+          );
+          await loadSessionAndRoster(false);
+        } catch (err: any) {
+          showAlert('error', 'Gagal Membatalkan Slot', err.message || 'Tidak dapat membatalkan slot.');
+        } finally {
+          setIsLeaving(false);
+        }
+      }
+    });
   };
 
   // 3c. Action: Cancel Session (Host Only)
@@ -518,35 +547,33 @@ export default function LobbyScreen({ route, navigation }: Props) {
       return;
     }
 
-    Alert.alert(
-      'Batalkan Seluruh Sesi? ⚠️',
-      'Sesi mabar ini akan dibatalkan untuk semua peserta terdaftar. Tindakan ini tidak dapat dibatalkan kembali. Apakah Anda yakin?',
-      [
-        { text: 'Jangan Batalkan', style: 'cancel' },
-        {
-          text: 'Ya, Batalkan Sesi',
-          style: 'destructive',
-          onPress: async () => {
-            if (!user || !currentSession?.id) return;
+    showConfirm({
+      type: 'error',
+      title: 'Batalkan Seluruh Sesi Match?',
+      message: 'Sesi mabar ini akan dibatalkan untuk semua peserta terdaftar. Match akan dinonaktifkan secara permanen.',
+      contextBadge: '🚨 Perhatian: Pembatalan Permanen',
+      primaryButtonText: 'Ya, Batalkan Sesi',
+      secondaryButtonText: 'Kembali, Jangan Batalkan',
+      onConfirm: async () => {
+        closeAlert();
+        if (!user || !currentSession?.id) return;
 
-            setIsCancellingSession(true);
-            try {
-              await api.updateSessionStatus(currentSession.id, user.id, 'CANCELLED');
-              showAlert(
-                'success',
-                'Sesi Berhasil Dibatalkan',
-                'Sesi mabar telah dibatalkan dan jadwal dinonaktifkan.'
-              );
-              await loadSessionAndRoster(false);
-            } catch (err: any) {
-              showAlert('error', 'Gagal Membatalkan Sesi', err.message || 'Terjadi kesalahan server.');
-            } finally {
-              setIsCancellingSession(false);
-            }
-          }
+        setIsCancellingSession(true);
+        try {
+          await api.updateSessionStatus(currentSession.id, user.id, 'CANCELLED');
+          showAlert(
+            'success',
+            'Sesi Berhasil Dibatalkan',
+            'Sesi mabar telah dibatalkan dan jadwal dinonaktifkan.'
+          );
+          await loadSessionAndRoster(false);
+        } catch (err: any) {
+          showAlert('error', 'Gagal Membatalkan Sesi', err.message || 'Terjadi kesalahan server.');
+        } finally {
+          setIsCancellingSession(false);
         }
-      ]
-    );
+      }
+    });
   };
 
   // 4. Action: Bagikan Tautan Undangan
@@ -1005,15 +1032,19 @@ export default function LobbyScreen({ route, navigation }: Props) {
         onSubmit={handleSubmitReviews}
       />
 
-      {/* Custom Alert Modal */}
+      {/* Modern Bento Action Sheet & Confirmation Modal */}
       <CustomAlertModal
         visible={alertConfig.visible}
         type={alertConfig.type}
         title={alertConfig.title}
         message={alertConfig.message}
+        contextBadge={alertConfig.contextBadge}
         primaryButtonText={alertConfig.primaryButtonText}
-        onPrimaryPress={closeAlert}
+        secondaryButtonText={alertConfig.secondaryButtonText}
+        onPrimaryPress={alertConfig.onPrimaryPress || closeAlert}
+        onSecondaryPress={alertConfig.onSecondaryPress || closeAlert}
         onClose={closeAlert}
+        isLoading={isLeaving || isCancellingSession}
       />
     </SafeAreaView>
   );
