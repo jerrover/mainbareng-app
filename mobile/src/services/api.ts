@@ -230,6 +230,27 @@ export const api = {
     return json;
   },
 
+  async updateSessionStatus(
+    sessionId: string,
+    hostId: string,
+    status: 'LOCKED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  ): Promise<ApiSession> {
+    const authHeaders = await getAuthHeader();
+    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify({ host_id: hostId, status })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || json.message || 'Gagal memperbarui status sesi');
+    }
+    return json.data;
+  },
+
   async getMyProfile(): Promise<ApiProfile | null> {
     try {
       const authHeaders = await getAuthHeader();

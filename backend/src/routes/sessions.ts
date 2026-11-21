@@ -665,6 +665,17 @@ sessionRouter.patch('/:id/status', async (c) => {
       await recalculateParticipantsMetricsForSession(sessionId);
     }
 
+    if (nextStatus === 'CANCELLED') {
+      await supabase
+        .from('session_participants')
+        .update({
+          attendance_status: 'CANCELLED',
+          cancelled_at: new Date().toISOString()
+        })
+        .eq('session_id', sessionId)
+        .neq('attendance_status', 'CANCELLED');
+    }
+
     return c.json({ success: true, data: updatedSession }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);

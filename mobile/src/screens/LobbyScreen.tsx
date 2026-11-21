@@ -92,6 +92,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
   const [isSplitting, setIsSplitting] = useState<boolean>(false);
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const [isLeaving, setIsLeaving] = useState<boolean>(false);
+  const [isCancellingSession, setIsCancellingSession] = useState<boolean>(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
 
   // Wave 4: Rating & Sportivitas pasca-sesi
@@ -325,6 +326,8 @@ export default function LobbyScreen({ route, navigation }: Props) {
     return currentSession.host_id === user.id;
   }, [currentSession, user]);
 
+  const isSessionCancelled = currentSession?.status === 'CANCELLED';
+
   const myParticipant = useMemo(() => {
     if (!user) return undefined;
     return participants.find((p) => p.userId === user.id);
@@ -501,6 +504,44 @@ export default function LobbyScreen({ route, navigation }: Props) {
               showAlert('error', 'Gagal Membatalkan Slot', err.message || 'Tidak dapat membatalkan slot.');
             } finally {
               setIsLeaving(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // 3c. Action: Cancel Session (Host Only)
+  const handleCancelSession = () => {
+    if (!isHostUser) {
+      showAlert('warning', 'Akses Ditolak', 'Hanya Host yang berhak membatalkan sesi mabar.');
+      return;
+    }
+
+    Alert.alert(
+      'Batalkan Seluruh Sesi? ⚠️',
+      'Sesi mabar ini akan dibatalkan untuk semua peserta terdaftar. Tindakan ini tidak dapat dibatalkan kembali. Apakah Anda yakin?',
+      [
+        { text: 'Jangan Batalkan', style: 'cancel' },
+        {
+          text: 'Ya, Batalkan Sesi',
+          style: 'destructive',
+          onPress: async () => {
+            if (!user || !currentSession?.id) return;
+
+            setIsCancellingSession(true);
+            try {
+              await api.updateSessionStatus(currentSession.id, user.id, 'CANCELLED');
+              showAlert(
+                'success',
+                'Sesi Berhasil Dibatalkan',
+                'Sesi mabar telah dibatalkan dan jadwal dinonaktifkan.'
+              );
+              await loadSessionAndRoster(false);
+            } catch (err: any) {
+              showAlert('error', 'Gagal Membatalkan Sesi', err.message || 'Terjadi kesalahan server.');
+            } finally {
+              setIsCancellingSession(false);
             }
           }
         }
@@ -877,7 +918,14 @@ export default function LobbyScreen({ route, navigation }: Props) {
 
         {/* Sticky Join Action Footer */}
         <View style={styles.footerActionBox}>
-          {canReview ? (
+          {isSessionCancelled ? (
+            <View style={styles.cancelledMatchBanner}>
+              <Text style={styles.cancelledMatchTitle}>⚠️ Sesi Mabar Ini Telah Dibatalkan</Text>
+              <Text style={styles.cancelledMatchSubtext}>
+                Host telah membatalkan kegiatan match ini. Seluruh slot dan jadwal dinonaktifkan.
+              </Text>
+            </View>
+          ) : canReview ? (
             <TouchableOpacity
               style={styles.ratingCtaBtn}
               activeOpacity={0.8}
@@ -893,7 +941,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
                     ✓ Terdaftar di Slot #{myParticipant?.slot || '1'} {isHostUser ? '(Host)' : ''}
                   </Text>
                 </View>
-                {!isHostUser && (
+                {!isHostUser ? (
                   <TouchableOpacity
                     style={[styles.leaveSlotBtn, isLeaving && styles.btnDisabled]}
                     activeOpacity={0.7}
@@ -904,6 +952,19 @@ export default function LobbyScreen({ route, navigation }: Props) {
                       <ActivityIndicator size="small" color="#FF6B6B" />
                     ) : (
                       <Text style={styles.leaveSlotBtnText}>✕ Batalkan Slot</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.cancelSessionBtn, isCancellingSession && styles.btnDisabled]}
+                    activeOpacity={0.7}
+                    onPress={handleCancelSession}
+                    disabled={isCancellingSession}
+                  >
+                    {isCancellingSession ? (
+                      <ActivityIndicator size="small" color="#FF6B6B" />
+                    ) : (
+                      <Text style={styles.cancelSessionBtnText}>✕ Batalkan Sesi</Text>
                     )}
                   </TouchableOpacity>
                 )}
@@ -1468,6 +1529,46 @@ const styles = StyleSheet.create({
     fontFamily: THEME.typography.fonts.medium,
     fontSize: 11,
     color: '#FF6B6B',
+    includeFontPadding: false
+  },
+  cancelSessionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.6)',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8
+  },
+  cancelSessionBtnText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 11,
+    color: '#FF6B6B',
+    includeFontPadding: false
+  },
+  cancelledMatchBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center'
+  },
+  cancelledMatchTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 13,
+    color: '#FF6B6B',
+    includeFontPadding: false
+  },
+  cancelledMatchSubtext: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 16,
     includeFontPadding: false
   },
   joinedSubtext: {
