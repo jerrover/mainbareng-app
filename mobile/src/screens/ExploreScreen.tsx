@@ -194,10 +194,10 @@ function formatKickoff(isoDateStr: string): { time: string; dayLabel: string } {
 
 function getActivityBadgeLabel(activityType: string = ''): string {
   const act = activityType.toLowerCase();
-  if (act.includes('futsal')) return 'FUTSAL 5v5';
-  if (act.includes('badminton')) return 'BADMINTON GANDA';
-  if (act.includes('basket')) return 'BASKET 3v3';
-  if (act.includes('mlbb')) return 'MLBB RANKED';
+  if (act.includes('futsal')) return '⚽ FUTSAL 5v5';
+  if (act.includes('badminton')) return '🏸 BADMINTON GANDA';
+  if (act.includes('basket')) return '🏀 BASKET 3v3';
+  if (act.includes('mlbb')) return '🎮 MLBB RANKED';
   return activityType.toUpperCase() || 'MABAR SESI';
 }
 
@@ -610,6 +610,10 @@ export default function ExploreScreen({ navigation }: Props) {
               const pips = Array.from({ length: totalSlots }, (_, i) => i < filledSlots);
               const isFutsal = totalSlots === 10;
 
+              const isCancelled = session.status === 'CANCELLED';
+              const isLocked = session.status === 'LOCKED';
+              const isCompleted = session.status === 'COMPLETED';
+
               const kickoff = formatKickoff(session.start_time);
               const venueName =
                 session.venues?.name || session.custom_location || 'Venue Rekanan Mabar';
@@ -622,7 +626,21 @@ export default function ExploreScreen({ navigation }: Props) {
                   : 'Gratis';
 
               return (
-                <View key={session.id} style={styles.matchPassCard}>
+                <TouchableOpacity
+                  key={session.id}
+                  style={[
+                    styles.matchPassCard,
+                    isCancelled && styles.matchPassCardCancelled,
+                    isLocked && styles.matchPassCardLocked
+                  ]}
+                  activeOpacity={0.88}
+                  onPress={() =>
+                    navigation.navigate('Lobby', {
+                      sessionId: session.id,
+                      sessionTitle: session.title
+                    })
+                  }
+                >
                   {/* Stub Header */}
                   <View style={styles.stubHeader}>
                     <View style={styles.stubHeaderLeft}>
@@ -634,23 +652,25 @@ export default function ExploreScreen({ navigation }: Props) {
                       <View
                         style={[
                           styles.modePill,
-                          session.status === 'LOCKED' && styles.modePillLocked,
-                          session.status === 'COMPLETED' && styles.modePillCompleted
+                          isLocked && styles.modePillLocked,
+                          isCompleted && styles.modePillCompleted,
+                          isCancelled && styles.modePillCancelled
                         ]}
                       >
                         <Text
                           style={[
                             styles.modePillText,
-                            session.status === 'LOCKED' && styles.modePillLockedText,
-                            session.status === 'COMPLETED' && styles.modePillCompletedText
+                            isLocked && styles.modePillLockedText,
+                            isCompleted && styles.modePillCompletedText,
+                            isCancelled && styles.modePillCancelledText
                           ]}
                         >
-                          {session.status || 'OPEN'}
+                          {isCancelled ? 'BATAL' : session.status || 'OPEN'}
                         </Text>
                       </View>
                     </View>
                     <Text style={styles.hostText}>
-                      Host: {hostName} ({hostScore})
+                      Host: {hostName} · 🛡️ {hostScore}
                     </Text>
                   </View>
 
@@ -674,8 +694,8 @@ export default function ExploreScreen({ navigation }: Props) {
                       <Text style={styles.matchVenue} numberOfLines={1}>
                         📍 {venueName}
                       </Text>
-                      <View style={styles.karmaBadgeBox}>
-                        <Text style={styles.karmaBadgeText}>
+                      <View style={styles.matchCreditBadgeBox}>
+                        <Text style={styles.matchCreditBadgeText}>
                           🛡️ Min Credit: {session.min_credit_score ?? 70}
                         </Text>
                       </View>
@@ -691,10 +711,18 @@ export default function ExploreScreen({ navigation }: Props) {
                       <Text
                         style={[
                           styles.quotaRemaining,
-                          emptySlots === 0 && { color: THEME.colors.warning }
+                          isCancelled
+                            ? { color: '#FF6B6B' }
+                            : emptySlots === 0
+                            ? { color: THEME.colors.warning }
+                            : { color: THEME.colors.success }
                         ]}
                       >
-                        {emptySlots === 0 ? 'Slot Penuh!' : `Sisa ${emptySlots} Slot!`}
+                        {isCancelled
+                          ? 'Sesi Dibatalkan'
+                          : emptySlots === 0
+                          ? 'Slot Penuh!'
+                          : `Sisa ${emptySlots} Slot!`}
                       </Text>
                     </View>
                     <View style={styles.pipsRow}>
@@ -704,7 +732,7 @@ export default function ExploreScreen({ navigation }: Props) {
                           style={[
                             styles.pip,
                             isFutsal ? styles.pipFutsal : styles.pipBadminton,
-                            filled && styles.pipActive
+                            filled && (isCancelled ? styles.pipCancelled : styles.pipActive)
                           ]}
                         />
                       ))}
@@ -729,20 +757,23 @@ export default function ExploreScreen({ navigation }: Props) {
                         )}
                       </View>
                     </View>
-                    <TouchableOpacity
-                      style={styles.btnDetail}
-                      activeOpacity={0.8}
-                      onPress={() =>
-                        navigation.navigate('Lobby', {
-                          sessionId: session.id,
-                          sessionTitle: session.title
-                        })
-                      }
+                    <View
+                      style={[
+                        styles.btnDetail,
+                        isCancelled && styles.btnDetailCancelled
+                      ]}
                     >
-                      <Text style={styles.btnDetailText}>Detail Sesi ➔</Text>
-                    </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.btnDetailText,
+                          isCancelled && styles.btnDetailCancelledText
+                        ]}
+                      >
+                        {isCancelled ? 'Lihat Info ➔' : 'Detail Sesi ➔'}
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -1074,6 +1105,13 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.cardBorder,
     overflow: 'hidden'
   },
+  matchPassCardCancelled: {
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    opacity: 0.78
+  },
+  matchPassCardLocked: {
+    borderColor: 'rgba(255, 159, 10, 0.4)'
+  },
   stubHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1123,6 +1161,12 @@ const styles = StyleSheet.create({
   },
   modePillCompletedText: {
     color: THEME.colors.success
+  },
+  modePillCancelled: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)'
+  },
+  modePillCancelledText: {
+    color: '#FF6B6B'
   },
   hostText: {
     fontFamily: THEME.typography.fonts.regular,
@@ -1202,6 +1246,20 @@ const styles = StyleSheet.create({
     color: THEME.colors.warning,
     includeFontPadding: false
   },
+  matchCreditBadgeBox: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 159, 10, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 6
+  },
+  matchCreditBadgeText: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 9,
+    color: THEME.colors.warning,
+    includeFontPadding: false
+  },
 
   // Quota Pips
   quotaSection: {
@@ -1246,6 +1304,9 @@ const styles = StyleSheet.create({
   },
   pipActive: {
     backgroundColor: THEME.colors.primary
+  },
+  pipCancelled: {
+    backgroundColor: '#FF6B6B'
   },
 
   // Perforation Notch Divider
@@ -1326,5 +1387,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: THEME.colors.textOnPrimary,
     includeFontPadding: false
+  },
+  btnDetailCancelled: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)'
+  },
+  btnDetailCancelledText: {
+    color: '#FF6B6B'
   }
 });

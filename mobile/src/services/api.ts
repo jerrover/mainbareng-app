@@ -209,6 +209,140 @@ export const api = {
     return json;
   },
 
+  async leaveSession(
+    sessionId: string,
+    userId: string,
+    reason?: string
+  ): Promise<{ released_slot: number; session_reopened: boolean; remaining_participants: number }> {
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`${BASE_URL}/api/sessions/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ session_id: sessionId, user_id: userId, reason })
+      });
+
+      let json: any = null;
+      try {
+        const text = await res.text();
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+
+      if (res.ok && json?.success) {
+        return json;
+      }
+
+      // Jika endpoint Vercel 404 (karena backend baru di local branch & belum dideploy ke live Vercel),
+      // jalankan fallback update partisipasi langsung lewat client Supabase (didukung RLS policy):
+      if (res.status === 404 || !res.ok) {
+        console.warn(`[api.leaveSession] Server status ${res.status}, executing direct Supabase fallback...`);
+        const { data: partData, error: partErr } = await supabase
+          .from('session_participants')
+          .update({
+            attendance_status: 'CANCELLED',
+            cancelled_at: new Date().toISOString(),
+            assigned_team: null
+          })
+          .match({ session_id: sessionId, user_id: userId })
+          .select('slot_number')
+          .maybeSingle();
+
+        if (partErr) {
+          throw new Error(partErr.message || 'Gagal membatalkan slot sesi di database.');
+        }
+
+        // Cek sisa peserta aktif untuk auto-unlock sesi dari LOCKED -> OPEN
+        const { count: activeCount } = await supabase
+          .from('session_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('session_id', sessionId)
+          .neq('attendance_status', 'CANCELLED');
+
+        await supabase
+          .from('sessions')
+          .update({ status: 'OPEN', updated_at: new Date().toISOString() })
+          .match({ id: sessionId, status: 'LOCKED' });
+
+        return {
+          released_slot: partData?.slot_number || 1,
+          session_reopened: true,
+          remaining_participants: activeCount || 0
+        };
+      }
+
+      throw new Error(json?.message || json?.error || `Gagal membatalkan slot: HTTP ${res.status}`);
+    } catch (err: any) {
+      throw new Error(err.message || 'Gagal membatalkan slot sesi.');
+    }
+  },
+
+  async updateSessionStatus(
+    sessionId: string,
+    hostId: string,
+    status: 'LOCKED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  ): Promise<ApiSession> {
+    try {
+      const authHeaders = await getAuthHeader();
+      const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ host_id: hostId, status })
+      });
+
+      let json: any = null;
+      try {
+        const text = await res.text();
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+
+      if (res.ok && json?.success) {
+        return json.data;
+      }
+
+      if (res.status === 404 || !res.ok) {
+        console.warn(`[api.updateSessionStatus] Server status ${res.status}, executing direct Supabase fallback...`);
+        const { data: updatedSession, error: updateErr } = await supabase
+          .from('sessions')
+          .update({
+            status,
+            updated_at: new Date().toISOString()
+          })
+          .match({ id: sessionId, host_id: hostId })
+          .select()
+          .single();
+
+        if (updateErr) throw new Error(updateErr.message || 'Gagal mengubah status sesi di database.');
+
+        if (status === 'CANCELLED') {
+          await supabase
+            .from('session_participants')
+            .update({
+              attendance_status: 'CANCELLED',
+              cancelled_at: new Date().toISOString()
+            })
+            .eq('session_id', sessionId)
+            .neq('attendance_status', 'CANCELLED');
+        }
+
+        return updatedSession as any;
+      }
+
+      throw new Error(json?.error || json?.message || `Gagal memperbarui status sesi (${res.status})`);
+    } catch (err: any) {
+      throw new Error(err.message || 'Gagal memperbarui status sesi');
+    }
+  },
+
   async getMyProfile(): Promise<ApiProfile | null> {
     try {
       const authHeaders = await getAuthHeader();

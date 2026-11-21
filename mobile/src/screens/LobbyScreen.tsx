@@ -15,6 +15,7 @@ import { THEME } from '../theme';
 import { RootStackScreenProps } from '../navigation/types';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 import RatingModal from '../components/RatingModal';
+import PlayerCard from '../components/PlayerCard';
 import { api, ApiSession } from '../services/api';
 import type { ApiReviewTarget, SubmitReviewItem } from '../services/api';
 import { supabase } from '../services/supabase';
@@ -89,6 +90,8 @@ export default function LobbyScreen({ route, navigation }: Props) {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSplitting, setIsSplitting] = useState<boolean>(false);
   const [isJoining, setIsJoining] = useState<boolean>(false);
+  const [isLeaving, setIsLeaving] = useState<boolean>(false);
+  const [isCancellingSession, setIsCancellingSession] = useState<boolean>(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
 
   // Wave 4: Rating & Sportivitas pasca-sesi
@@ -99,13 +102,18 @@ export default function LobbyScreen({ route, navigation }: Props) {
 
   const [activeTeamTab, setActiveTeamTab] = useState<'all' | 'A' | 'B'>('all');
 
-  // Custom Alert Modal State
+  // Custom Bento Alert & Action Sheet State
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
     type: AlertType;
     title: string;
     message: string;
+    contextBadge?: string;
     primaryButtonText?: string;
+    secondaryButtonText?: string;
+    onPrimaryPress?: () => void;
+    onSecondaryPress?: () => void;
+    isLoading?: boolean;
   }>({
     visible: false,
     type: 'info',
@@ -117,14 +125,39 @@ export default function LobbyScreen({ route, navigation }: Props) {
     type: AlertType,
     title: string,
     message: string,
-    primaryButtonText = 'Mengerti'
+    primaryButtonText = 'Mengerti',
+    contextBadge?: string
   ) => {
     setAlertConfig({
       visible: true,
       type,
       title,
       message,
-      primaryButtonText
+      contextBadge,
+      primaryButtonText,
+      onPrimaryPress: closeAlert
+    });
+  };
+
+  const showConfirm = (params: {
+    type?: AlertType;
+    title: string;
+    message: string;
+    contextBadge?: string;
+    primaryButtonText: string;
+    secondaryButtonText?: string;
+    onConfirm: () => void | Promise<void>;
+  }) => {
+    setAlertConfig({
+      visible: true,
+      type: params.type || 'warning',
+      title: params.title,
+      message: params.message,
+      contextBadge: params.contextBadge,
+      primaryButtonText: params.primaryButtonText,
+      secondaryButtonText: params.secondaryButtonText || 'Batal',
+      onPrimaryPress: params.onConfirm,
+      onSecondaryPress: closeAlert
     });
   };
 
@@ -317,11 +350,37 @@ export default function LobbyScreen({ route, navigation }: Props) {
     return participants.some((p) => p.userId === user.id);
   }, [participants, user]);
 
+  const isHostUser = useMemo(() => {
+    if (!user || !currentSession) return false;
+    return currentSession.host_id === user.id;
+  }, [currentSession, user]);
+
+  const isSessionCancelled = currentSession?.status === 'CANCELLED';
+
+  const myParticipant = useMemo(() => {
+    if (!user) return undefined;
+    return participants.find((p) => p.userId === user.id);
+  }, [participants, user]);
+
   // Dynamic values
   const totalSlots = currentSession?.max_slots || 10;
   const venueTotalCost = currentSession?.estimated_cost_total || 300000;
   const currentCostPerPlayer = Math.round(venueTotalCost / Math.max(participants.length, 1));
   const fullTargetCostPerPlayer = Math.round(venueTotalCost / totalSlots);
+
+  const filteredParticipants = useMemo(() => {
+    if (activeTeamTab === 'all') return participants;
+    return participants.filter((p) => p.team === activeTeamTab);
+  }, [participants, activeTeamTab]);
+
+  const emptySlotNumbers = useMemo(() => {
+    const filled = new Set(participants.map((p) => p.slot));
+    return Array.from({ length: totalSlots }, (_, i) => i + 1).filter(
+      (s) => !filled.has(s)
+    );
+  }, [participants, totalSlots]);
+
+  const nextAvailableSlot = emptySlotNumbers.length > 0 ? emptySlotNumbers[0] : null;
 
   const kickoffInfo = formatKickoffTime(currentSession?.start_time);
   const venueTitle =
@@ -428,6 +487,93 @@ export default function LobbyScreen({ route, navigation }: Props) {
     } finally {
       setIsJoining(false);
     }
+  };
+
+  // 3b. Action: Leave / Cancel Slot (Atomic Supabase Leave API)
+  const handleLeaveSlot = () => {
+    if (!hasJoined) return;
+
+    if (isHostUser) {
+      showAlert(
+        'warning',
+        'Host Tidak Dapat Keluar',
+        'Sebagai Host, Anda tidak dapat membatalkan slot begitu saja. Anda dapat Membatalkan Sesi jika berhalangan hadir.'
+      );
+      return;
+    }
+
+    const slotLabel = myParticipant?.slot ? `Slot #${myParticipant.slot}` : 'Slot Anda';
+
+    showConfirm({
+      type: 'warning',
+      title: 'Batalkan Keikutsertaan?',
+      message: `${slotLabel} akan dilepas kembali ke publik. Susunan tim dan alokasi slot akan di-reset.`,
+      contextBadge: `⚠️ ${slotLabel} Akan Dikosongkan`,
+      primaryButtonText: 'Ya, Batalkan Slot',
+      secondaryButtonText: 'Tetap Ikut di Sesi Ini',
+      onConfirm: async () => {
+        closeAlert();
+        if (!user) return;
+
+        if (!currentSession?.id) {
+          // Local fallback
+          setParticipants(participants.filter((p) => p.userId !== user.id));
+          showAlert('success', 'Slot Dibatalkan', 'Anda telah keluar dari sesi mabar ini.');
+          return;
+        }
+
+        setIsLeaving(true);
+        try {
+          const res = await api.leaveSession(currentSession.id, user.id);
+          showAlert(
+            'success',
+            'Slot Berhasil Dibatalkan',
+            `Slot #${res.released_slot} telah dilepas kembali.`
+          );
+          await loadSessionAndRoster(false);
+        } catch (err: any) {
+          showAlert('error', 'Gagal Membatalkan Slot', err.message || 'Tidak dapat membatalkan slot.');
+        } finally {
+          setIsLeaving(false);
+        }
+      }
+    });
+  };
+
+  // 3c. Action: Cancel Session (Host Only)
+  const handleCancelSession = () => {
+    if (!isHostUser) {
+      showAlert('warning', 'Akses Ditolak', 'Hanya Host yang berhak membatalkan sesi mabar.');
+      return;
+    }
+
+    showConfirm({
+      type: 'error',
+      title: 'Batalkan Seluruh Sesi Match?',
+      message: 'Sesi mabar ini akan dibatalkan untuk semua peserta terdaftar. Match akan dinonaktifkan secara permanen.',
+      contextBadge: '🚨 Perhatian: Pembatalan Permanen',
+      primaryButtonText: 'Ya, Batalkan Sesi',
+      secondaryButtonText: 'Kembali, Jangan Batalkan',
+      onConfirm: async () => {
+        closeAlert();
+        if (!user || !currentSession?.id) return;
+
+        setIsCancellingSession(true);
+        try {
+          await api.updateSessionStatus(currentSession.id, user.id, 'CANCELLED');
+          showAlert(
+            'success',
+            'Sesi Berhasil Dibatalkan',
+            'Sesi mabar telah dibatalkan dan jadwal dinonaktifkan.'
+          );
+          await loadSessionAndRoster(false);
+        } catch (err: any) {
+          showAlert('error', 'Gagal Membatalkan Sesi', err.message || 'Terjadi kesalahan server.');
+        } finally {
+          setIsCancellingSession(false);
+        }
+      }
+    });
   };
 
   // 4. Action: Bagikan Tautan Undangan
@@ -607,7 +753,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
             <Text style={styles.rosterTitle}>
               ROSTER PEMAIN ({participants.length}/{totalSlots})
             </Text>
-            <Text style={styles.atomicLockBadge}>🔒 Atomic Slot Lock</Text>
+            <Text style={styles.atomicLockBadge}>🔒 Anti-Overbooking</Text>
           </View>
 
           {/* Team Filter Tabs */}
@@ -670,107 +816,103 @@ export default function LobbyScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        {/* Player Slot List */}
+        {/* Player Roster Grid & Slots */}
         {!isLoading && (
-          <View style={styles.rosterList}>
-            {Array.from({ length: totalSlots }, (_, i) => i + 1).map((slotNum) => {
-              const player = participants.find((p) => p.slot === slotNum);
+          <View style={styles.rosterSection}>
+            {/* 1. Grid Player Cards (2 Kolom) */}
+            {filteredParticipants.length > 0 ? (
+              <View style={styles.playerCardGrid}>
+                {filteredParticipants.map((player) => (
+                  <View key={player.slot} style={styles.playerCardGridItem}>
+                    <PlayerCard
+                      slot={player.slot}
+                      name={player.name}
+                      role={player.role}
+                      ovr={player.ovr}
+                      creditScore={player.karma}
+                      team={player.team}
+                      isHost={player.isHost}
+                      isCurrentUser={player.userId === user?.id}
+                      onPress={() =>
+                        showAlert(
+                          'info',
+                          `${player.name} (${player.team === 'A' ? 'Tim A' : 'Tim B'})`,
+                          `Role: ${player.role}\nOVR: ${player.ovr} · Credit Score: ${player.karma}/100\nStatus: ${
+                            player.isHost ? 'Host / Penyelenggara Match' : 'Pemain Terverifikasi'
+                          }`
+                        )
+                      }
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyTeamStateCard}>
+                <Text style={styles.emptyTeamStateIcon}>
+                  {activeTeamTab === 'A' ? '🔵' : '🔴'}
+                </Text>
+                <Text style={styles.emptyTeamStateTitle}>
+                  Belum Ada Pemain di {activeTeamTab === 'A' ? 'Tim A' : 'Tim B'}
+                </Text>
+                <Text style={styles.emptyTeamStateSubtitle}>
+                  Jalankan Balanced Team Splitter untuk membagi tim secara seimbang atau undang teman.
+                </Text>
+              </View>
+            )}
 
-              // Filter by team if selected
-              if (activeTeamTab !== 'all' && player && player.team !== activeTeamTab) {
-                return null;
-              }
-
-              if (player) {
-                const initials = player.name.slice(0, 2).toUpperCase();
-                const isTeamA = player.team === 'A';
-
-                return (
-                  <View
-                    key={slotNum}
-                    style={[
-                      styles.playerCardFilled,
-                      isTeamA ? styles.borderTeamA : styles.borderTeamB
-                    ]}
+            {/* 2. Slot Kosong & Action Area */}
+            {activeTeamTab === 'all' && emptySlotNumbers.length > 0 && (
+              <View style={styles.emptySlotSection}>
+                {!hasJoined ? (
+                  <TouchableOpacity
+                    style={styles.nextSlotActionCard}
+                    activeOpacity={0.8}
+                    onPress={handleJoinSlot}
+                    disabled={isJoining}
                   >
-                    <View style={styles.playerSlotBadge}>
-                      <Text style={styles.playerSlotText}>#{slotNum}</Text>
+                    <View style={styles.nextSlotIconCircle}>
+                      <Text style={styles.nextSlotIconText}>➕</Text>
                     </View>
-
-                    <View
-                      style={[
-                        styles.playerAvatar,
-                        isTeamA ? styles.avatarTeamA : styles.avatarTeamB
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.playerAvatarText,
-                          isTeamA ? styles.avatarTextTeamA : styles.avatarTextTeamB
-                        ]}
-                      >
-                        {initials}
+                    <View style={styles.nextSlotTextCol}>
+                      <Text style={styles.nextSlotTitle}>
+                        Kunci Slot #{nextAvailableSlot} Sekarang
+                      </Text>
+                      <Text style={styles.nextSlotSubtitle}>
+                        Tersisa {emptySlotNumbers.length} slot kosong dari total {totalSlots} pemain
                       </Text>
                     </View>
-
-                    <View style={styles.playerDetails}>
-                      <View style={styles.playerNameRow}>
-                        <Text style={styles.playerName} numberOfLines={1}>
-                          {player.name}
-                        </Text>
-                        {player.isHost && (
-                          <View style={styles.hostBadge}>
-                            <Text style={styles.hostBadgeText}>HOST</Text>
-                          </View>
-                        )}
-                        <View
-                          style={[
-                            styles.teamTag,
-                            isTeamA ? styles.teamTagA : styles.teamTagB
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.teamTagText,
-                              isTeamA ? styles.teamTagTextA : styles.teamTagTextB
-                            ]}
-                          >
-                            {isTeamA ? 'TIM A' : 'TIM B'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.playerRole}>{player.role}</Text>
+                    <View style={styles.nextSlotBtnPill}>
+                      {isJoining ? (
+                        <ActivityIndicator size="small" color={THEME.colors.textOnPrimary} />
+                      ) : (
+                        <Text style={styles.nextSlotBtnText}>Gabung</Text>
+                      )}
                     </View>
-
-                    <View style={styles.playerStats}>
-                      <View style={styles.ovrBadge}>
-                        <Text style={styles.ovrText}>OVR {player.ovr}</Text>
-                      </View>
-                      <Text style={styles.karmaText}>🛡️ {player.karma}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.inviteSlotActionCard}
+                    activeOpacity={0.8}
+                    onPress={handleShareInvite}
+                  >
+                    <View style={styles.inviteSlotIconCircle}>
+                      <Text style={styles.inviteSlotIconText}>🔗</Text>
                     </View>
-                  </View>
-                );
-              }
-
-              // Empty Slot
-              return (
-                <View key={slotNum} style={styles.playerCardEmpty}>
-                  <View style={styles.emptySlotBadge}>
-                    <Text style={styles.emptySlotText}>#{slotNum}</Text>
-                  </View>
-                  <View style={styles.emptyAvatar}>
-                    <Text style={styles.emptyAvatarText}>?</Text>
-                  </View>
-                  <View style={styles.playerDetails}>
-                    <Text style={styles.emptySlotTitle}>Slot Kosong #{slotNum}</Text>
-                    <Text style={styles.emptySlotSubtitle}>Menunggu pemain bergabung...</Text>
-                  </View>
-                  <View style={styles.readyBadge}>
-                    <Text style={styles.readyBadgeText}>Available</Text>
-                  </View>
-                </View>
-              );
-            })}
+                    <View style={styles.nextSlotTextCol}>
+                      <Text style={styles.inviteSlotTitle}>
+                        Ajak Rekan untuk Slot #{nextAvailableSlot}
+                      </Text>
+                      <Text style={styles.nextSlotSubtitle}>
+                        Tersisa {emptySlotNumbers.length} slot lagi sebelum match penuh
+                      </Text>
+                    </View>
+                    <View style={styles.inviteSlotBtnPill}>
+                      <Text style={styles.inviteSlotBtnText}>Undang</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -803,7 +945,14 @@ export default function LobbyScreen({ route, navigation }: Props) {
 
         {/* Sticky Join Action Footer */}
         <View style={styles.footerActionBox}>
-          {canReview ? (
+          {isSessionCancelled ? (
+            <View style={styles.cancelledMatchBanner}>
+              <Text style={styles.cancelledMatchTitle}>⚠️ Sesi Mabar Ini Telah Dibatalkan</Text>
+              <Text style={styles.cancelledMatchSubtext}>
+                Host telah membatalkan kegiatan match ini. Seluruh slot dan jadwal dinonaktifkan.
+              </Text>
+            </View>
+          ) : canReview ? (
             <TouchableOpacity
               style={styles.ratingCtaBtn}
               activeOpacity={0.8}
@@ -813,11 +962,44 @@ export default function LobbyScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           ) : hasJoined ? (
             <View style={styles.joinedBanner}>
-              <Text style={styles.joinedBannerText}>
-                ✓ Anda Terdaftar di Sesi Ini
-              </Text>
+              <View style={styles.joinedBannerHeader}>
+                <View style={styles.joinedStatusBadge}>
+                  <Text style={styles.joinedBannerText}>
+                    ✓ Terdaftar di Slot #{myParticipant?.slot || '1'} {isHostUser ? '(Host)' : ''}
+                  </Text>
+                </View>
+                {!isHostUser ? (
+                  <TouchableOpacity
+                    style={[styles.leaveSlotBtn, isLeaving && styles.btnDisabled]}
+                    activeOpacity={0.7}
+                    onPress={handleLeaveSlot}
+                    disabled={isLeaving}
+                  >
+                    {isLeaving ? (
+                      <ActivityIndicator size="small" color="#FF6B6B" />
+                    ) : (
+                      <Text style={styles.leaveSlotBtnText}>✕ Batalkan Slot</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.cancelSessionBtn, isCancellingSession && styles.btnDisabled]}
+                    activeOpacity={0.7}
+                    onPress={handleCancelSession}
+                    disabled={isCancellingSession}
+                  >
+                    {isCancellingSession ? (
+                      <ActivityIndicator size="small" color="#FF6B6B" />
+                    ) : (
+                      <Text style={styles.cancelSessionBtnText}>✕ Batalkan Sesi</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
               <Text style={styles.joinedSubtext}>
-                Tiba di lapangan 15 menit sebelum kickoff untuk persiapan mabar.
+                {isHostUser
+                  ? 'Anda adalah Host sesi ini. Kelola kesiapan pemain dan pembagian tim.'
+                  : 'Tiba di lapangan 15 menit sebelum kickoff. Jika berhalangan, batalkan slot agar pemain lain bisa masuk.'}
               </Text>
             </View>
           ) : (
@@ -850,15 +1032,19 @@ export default function LobbyScreen({ route, navigation }: Props) {
         onSubmit={handleSubmitReviews}
       />
 
-      {/* Custom Alert Modal */}
+      {/* Modern Bento Action Sheet & Confirmation Modal */}
       <CustomAlertModal
         visible={alertConfig.visible}
         type={alertConfig.type}
         title={alertConfig.title}
         message={alertConfig.message}
+        contextBadge={alertConfig.contextBadge}
         primaryButtonText={alertConfig.primaryButtonText}
-        onPrimaryPress={closeAlert}
+        secondaryButtonText={alertConfig.secondaryButtonText}
+        onPrimaryPress={alertConfig.onPrimaryPress || closeAlert}
+        onSecondaryPress={alertConfig.onSecondaryPress || closeAlert}
         onClose={closeAlert}
+        isLoading={isLeaving || isCancellingSession}
       />
     </SafeAreaView>
   );
@@ -1146,209 +1332,151 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary
   },
 
-  // Roster List
-  rosterList: {
-    gap: 8,
+  // Roster Grid Section (Bento Player Cards)
+  rosterSection: {
     marginBottom: 16
   },
-  playerCardFilled: {
+  playerCardGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginHorizontal: -4
+  },
+  playerCardGridItem: {
+    width: '50%',
+    padding: 4
+  },
+
+  // Empty State untuk filter Tim yang belum ada pemain
+  emptyTeamStateCard: {
     backgroundColor: THEME.colors.card,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    padding: 10
-  },
-  borderTeamA: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#38BDF8'
-  },
-  borderTeamB: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#F43F5E'
-  },
-  playerSlotBadge: {
-    width: 28,
+    borderStyle: 'dashed',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    marginBottom: 10
   },
-  playerSlotText: {
+  emptyTeamStateIcon: {
+    fontSize: 24,
+    marginBottom: 8
+  },
+  emptyTeamStateTitle: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textMuted,
+    fontSize: 13,
+    color: THEME.colors.text,
+    textAlign: 'center',
     includeFontPadding: false
   },
-  playerAvatar: {
+  emptyTeamStateSubtitle: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 12,
+    lineHeight: 16,
+    includeFontPadding: false
+  },
+
+  // Slot Kosong & Action Section
+  emptySlotSection: {
+    marginTop: 6,
+    gap: 8
+  },
+  nextSlotActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(213, 255, 64, 0.04)',
+    borderRadius: 10,
+    borderWidth: 1.2,
+    borderColor: THEME.colors.primary,
+    borderStyle: 'dashed',
+    paddingVertical: 10,
+    paddingHorizontal: 12
+  },
+  nextSlotIconCircle: {
     width: 32,
     height: 32,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1.5,
-    borderColor: THEME.colors.primary,
+    borderRadius: 16,
+    backgroundColor: 'rgba(213, 255, 64, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10
   },
-  avatarTeamA: {
-    borderColor: '#38BDF8'
+  nextSlotIconText: {
+    fontSize: 14
   },
-  avatarTeamB: {
-    borderColor: '#F43F5E'
-  },
-  playerAvatarText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 11,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  avatarTextTeamA: {
-    color: '#38BDF8'
-  },
-  avatarTextTeamB: {
-    color: '#F43F5E'
-  },
-  playerDetails: {
+  nextSlotTextCol: {
     flex: 1
   },
-  playerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  playerName: {
+  nextSlotTitle: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 12,
     color: THEME.colors.text,
     includeFontPadding: false
   },
-  hostBadge: {
-    backgroundColor: 'rgba(213, 255, 64, 0.15)',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3
-  },
-  hostBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 8,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  teamTag: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3
-  },
-  teamTagA: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)'
-  },
-  teamTagB: {
-    backgroundColor: 'rgba(244, 63, 94, 0.15)'
-  },
-  teamTagText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 8,
-    includeFontPadding: false
-  },
-  teamTagTextA: {
-    color: '#38BDF8'
-  },
-  teamTagTextB: {
-    color: '#F43F5E'
-  },
-  playerRole: {
+  nextSlotSubtitle: {
     fontFamily: THEME.typography.fonts.regular,
     fontSize: 10,
-    color: THEME.colors.textSecondary,
+    color: THEME.colors.textMuted,
     marginTop: 2,
     includeFontPadding: false
   },
-  playerStats: {
-    alignItems: 'flex-end',
-    gap: 2
+  nextSlotBtnPill: {
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6
   },
-  ovrBadge: {
-    backgroundColor: THEME.colors.cardElevated,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4
-  },
-  ovrText: {
+  nextSlotBtnText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  karmaText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 10,
-    color: THEME.colors.success,
+    fontSize: 11,
+    color: THEME.colors.textOnPrimary,
     includeFontPadding: false
   },
 
-  // Empty Slot Card
-  playerCardEmpty: {
+  inviteSlotActionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(18, 20, 26, 0.4)',
+    backgroundColor: 'rgba(94, 92, 230, 0.06)',
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(192, 194, 184, 0.12)',
+    borderWidth: 1.2,
+    borderColor: THEME.colors.accent,
     borderStyle: 'dashed',
-    padding: 10
+    paddingVertical: 10,
+    paddingHorizontal: 12
   },
-  emptySlotBadge: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptySlotText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
-  },
-  emptyAvatar: {
+  inviteSlotIconCircle: {
     width: 32,
     height: 32,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderStyle: 'dashed',
+    borderRadius: 16,
+    backgroundColor: 'rgba(94, 92, 230, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10
   },
-  emptyAvatarText: {
+  inviteSlotIconText: {
+    fontSize: 14
+  },
+  inviteSlotTitle: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 12,
-    color: THEME.colors.textMuted,
+    color: THEME.colors.text,
     includeFontPadding: false
   },
-  emptySlotTitle: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
-  },
-  emptySlotSubtitle: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
-    color: THEME.colors.textMuted,
-    marginTop: 2,
-    includeFontPadding: false
-  },
-  readyBadge: {
-    backgroundColor: 'rgba(0, 245, 155, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  inviteSlotBtnPill: {
+    backgroundColor: THEME.colors.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 6
   },
-  readyBadgeText: {
+  inviteSlotBtnText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.success,
+    fontSize: 11,
+    color: '#FFFFFF',
     includeFontPadding: false
   },
 
@@ -1396,10 +1524,20 @@ const styles = StyleSheet.create({
   joinedBanner: {
     backgroundColor: THEME.colors.cardElevated,
     borderWidth: 1,
-    borderColor: THEME.colors.success,
+    borderColor: 'rgba(34, 197, 94, 0.35)',
     borderRadius: 12,
-    padding: 14,
-    alignItems: 'center'
+    padding: 12
+  },
+  joinedBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6
+  },
+  joinedStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1
   },
   joinedBannerText: {
     fontFamily: THEME.typography.fonts.bold,
@@ -1407,12 +1545,68 @@ const styles = StyleSheet.create({
     color: THEME.colors.success,
     includeFontPadding: false
   },
-  joinedSubtext: {
+  leaveSlotBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8
+  },
+  leaveSlotBtnText: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 11,
+    color: '#FF6B6B',
+    includeFontPadding: false
+  },
+  cancelSessionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.6)',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8
+  },
+  cancelSessionBtnText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 11,
+    color: '#FF6B6B',
+    includeFontPadding: false
+  },
+  cancelledMatchBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center'
+  },
+  cancelledMatchTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 13,
+    color: '#FF6B6B',
+    includeFontPadding: false
+  },
+  cancelledMatchSubtext: {
     fontFamily: THEME.typography.fonts.regular,
     fontSize: 11,
     color: THEME.colors.textSecondary,
     marginTop: 4,
     textAlign: 'center',
+    lineHeight: 16,
+    includeFontPadding: false
+  },
+  joinedSubtext: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    lineHeight: 16,
     includeFontPadding: false
   },
   btnJoinPrimary: {
