@@ -622,7 +622,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
             <Text style={styles.rosterTitle}>
               ROSTER PEMAIN ({participants.length}/{totalSlots})
             </Text>
-            <Text style={styles.atomicLockBadge}>🔒 Atomic Slot Lock</Text>
+            <Text style={styles.atomicLockBadge}>🔒 Anti-Overbooking</Text>
           </View>
 
           {/* Team Filter Tabs */}
@@ -732,7 +732,6 @@ export default function LobbyScreen({ route, navigation }: Props) {
             {/* 2. Slot Kosong & Action Area */}
             {activeTeamTab === 'all' && emptySlotNumbers.length > 0 && (
               <View style={styles.emptySlotSection}>
-                {/* Hero Action Card untuk Slot Berikutnya */}
                 {!hasJoined ? (
                   <TouchableOpacity
                     style={styles.nextSlotActionCard}
@@ -748,7 +747,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
                         Kunci Slot #{nextAvailableSlot} Sekarang
                       </Text>
                       <Text style={styles.nextSlotSubtitle}>
-                        Tersisa {emptySlotNumbers.length} slot terbuka · Row-Level Lock
+                        Tersisa {emptySlotNumbers.length} slot kosong dari total {totalSlots} pemain
                       </Text>
                     </View>
                     <View style={styles.nextSlotBtnPill}>
@@ -770,47 +769,16 @@ export default function LobbyScreen({ route, navigation }: Props) {
                     </View>
                     <View style={styles.nextSlotTextCol}>
                       <Text style={styles.inviteSlotTitle}>
-                        Ajak Teman untuk Slot #{nextAvailableSlot}
+                        Ajak Rekan untuk Slot #{nextAvailableSlot}
                       </Text>
                       <Text style={styles.nextSlotSubtitle}>
-                        Tersisa {emptySlotNumbers.length} slot lagi sebelum sesi penuh
+                        Tersisa {emptySlotNumbers.length} slot lagi sebelum match penuh
                       </Text>
                     </View>
                     <View style={styles.inviteSlotBtnPill}>
                       <Text style={styles.inviteSlotBtnText}>Undang</Text>
                     </View>
                   </TouchableOpacity>
-                )}
-
-                {/* Compact Remaining Slots Tracker */}
-                {emptySlotNumbers.length > 1 && (
-                  <View style={styles.compactRemainingBar}>
-                    <Text style={styles.compactRemainingLabel}>
-                      Slot Terbuka:
-                    </Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.emptyPillsScroll}
-                    >
-                      {emptySlotNumbers.slice(1).map((s) => (
-                        <TouchableOpacity
-                          key={s}
-                          style={styles.emptySlotMiniPill}
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            if (!hasJoined) {
-                              handleJoinSlot();
-                            } else {
-                              handleShareInvite();
-                            }
-                          }}
-                        >
-                          <Text style={styles.emptySlotMiniText}>#{s} Available</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
                 )}
               </View>
             )}
@@ -1334,44 +1302,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 11,
     color: '#FFFFFF',
-    includeFontPadding: false
-  },
-
-  // Compact Remaining Slots Tracker
-  compactRemainingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.colors.cardElevated,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    paddingVertical: 7,
-    paddingHorizontal: 10
-  },
-  compactRemainingLabel: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textMuted,
-    marginRight: 8,
-    includeFontPadding: false
-  },
-  emptyPillsScroll: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center'
-  },
-  emptySlotMiniPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(192, 194, 184, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3
-  },
-  emptySlotMiniText: {
-    fontFamily: THEME.typography.fonts.medium,
-    fontSize: 9.5,
-    color: THEME.colors.textSecondary,
     includeFontPadding: false
   },
 
