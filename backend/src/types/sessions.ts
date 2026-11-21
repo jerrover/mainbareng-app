@@ -14,6 +14,15 @@ export const splitTeamsParamsSchema = z.object({
 
 export type SplitTeamsParams = z.infer<typeof splitTeamsParamsSchema>;
 
+// Zod Schema untuk pembatalan / leave slot sesi (FR-05, FR-06)
+export const leaveSessionSchema = z.object({
+  session_id: z.string().uuid({ message: 'session_id harus berupa format UUID yang valid.' }),
+  user_id: z.string().uuid({ message: 'user_id harus berupa format UUID yang valid.' }),
+  reason: z.string().max(200, { message: 'Alasan maksimal 200 karakter.' }).nullable().optional()
+});
+
+export type LeaveSessionPayload = z.infer<typeof leaveSessionSchema>;
+
 // Participant Record sesuai spesifikasi OpenAPI ParticipantRecord
 export interface ParticipantRecord {
   id: string;

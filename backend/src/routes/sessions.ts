@@ -12,6 +12,7 @@ import {
   ParticipantRecord,
   ReviewTargetItem,
   SessionLifecycleStatus,
+  leaveSessionSchema,
   reviewTargetsQuerySchema,
   sessionUuidParamSchema,
   submitPeerReviewsSchema,
@@ -109,6 +110,45 @@ sessionRouter.post('/join', async (c) => {
     const { data, error } = await supabase.rpc('join_session_atomic', {
       p_session_id: session_id,
       p_user_id: user_id
+    });
+
+    if (error) throw error;
+
+    const status = data?.success ? 200 : 400;
+    return c.json(data, status);
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// POST /api/sessions/leave - Atomic Slot Cancellation (FR-05, FR-06)
+sessionRouter.post('/leave', async (c) => {
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ success: false, message: 'Payload JSON tidak valid.' }, 400);
+  }
+
+  const parseResult = leaveSessionSchema.safeParse(rawBody);
+  if (!parseResult.success) {
+    return c.json(
+      {
+        success: false,
+        message: parseResult.error.issues[0]?.message || 'Data pembatalan slot tidak valid.'
+      },
+      400
+    );
+  }
+
+  const { session_id, user_id, reason } = parseResult.data;
+
+  try {
+    // Panggil PostgreSQL Stored Function leave_session_atomic di Supabase
+    const { data, error } = await supabase.rpc('leave_session_atomic', {
+      p_session_id: session_id,
+      p_user_id: user_id,
+      p_reason: reason || null
     });
 
     if (error) throw error;

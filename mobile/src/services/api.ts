@@ -209,6 +209,27 @@ export const api = {
     return json;
   },
 
+  async leaveSession(
+    sessionId: string,
+    userId: string,
+    reason?: string
+  ): Promise<{ released_slot: number; session_reopened: boolean; remaining_participants: number }> {
+    const authHeaders = await getAuthHeader();
+    const res = await fetch(`${BASE_URL}/api/sessions/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify({ session_id: sessionId, user_id: userId, reason })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error || 'Gagal membatalkan slot sesi');
+    }
+    return json;
+  },
+
   async getMyProfile(): Promise<ApiProfile | null> {
     try {
       const authHeaders = await getAuthHeader();

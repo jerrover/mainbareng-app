@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Share,
-  Linking
+  Linking,
+  Alert
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../theme';
@@ -90,6 +91,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSplitting, setIsSplitting] = useState<boolean>(false);
   const [isJoining, setIsJoining] = useState<boolean>(false);
+  const [isLeaving, setIsLeaving] = useState<boolean>(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
 
   // Wave 4: Rating & Sportivitas pasca-sesi
@@ -318,6 +320,16 @@ export default function LobbyScreen({ route, navigation }: Props) {
     return participants.some((p) => p.userId === user.id);
   }, [participants, user]);
 
+  const isHostUser = useMemo(() => {
+    if (!user || !currentSession) return false;
+    return currentSession.host_id === user.id;
+  }, [currentSession, user]);
+
+  const myParticipant = useMemo(() => {
+    if (!user) return undefined;
+    return participants.find((p) => p.userId === user.id);
+  }, [participants, user]);
+
   // Dynamic values
   const totalSlots = currentSession?.max_slots || 10;
   const venueTotalCost = currentSession?.estimated_cost_total || 300000;
@@ -443,6 +455,57 @@ export default function LobbyScreen({ route, navigation }: Props) {
     } finally {
       setIsJoining(false);
     }
+  };
+
+  // 3b. Action: Leave / Cancel Slot (Atomic Supabase Leave API)
+  const handleLeaveSlot = () => {
+    if (!hasJoined) return;
+
+    if (isHostUser) {
+      showAlert(
+        'warning',
+        'Host Tidak Dapat Keluar',
+        'Sebagai Host, Anda tidak dapat membatalkan slot begitu saja. Anda dapat Membatalkan Sesi jika berhalangan hadir.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Batalkan Keikutsertaan? ⚠️',
+      `Slot #${myParticipant?.slot || ''} Anda akan dilepas ke pemain lain dan pembagian tim akan di-reset. Yakin ingin membatalkan slot ini?`,
+      [
+        { text: 'Tetap Ikut', style: 'cancel' },
+        {
+          text: 'Ya, Batalkan Slot',
+          style: 'destructive',
+          onPress: async () => {
+            if (!user) return;
+
+            if (!currentSession?.id) {
+              // Local fallback
+              setParticipants(participants.filter((p) => p.userId !== user.id));
+              showAlert('success', 'Slot Dibatalkan', 'Anda telah keluar dari sesi mabar ini.');
+              return;
+            }
+
+            setIsLeaving(true);
+            try {
+              const res = await api.leaveSession(currentSession.id, user.id);
+              showAlert(
+                'success',
+                'Slot Berhasil Dibatalkan',
+                `Slot #${res.released_slot} telah dilepas kembali.`
+              );
+              await loadSessionAndRoster(false);
+            } catch (err: any) {
+              showAlert('error', 'Gagal Membatalkan Slot', err.message || 'Tidak dapat membatalkan slot.');
+            } finally {
+              setIsLeaving(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   // 4. Action: Bagikan Tautan Undangan
@@ -824,11 +887,31 @@ export default function LobbyScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           ) : hasJoined ? (
             <View style={styles.joinedBanner}>
-              <Text style={styles.joinedBannerText}>
-                ✓ Anda Terdaftar di Sesi Ini
-              </Text>
+              <View style={styles.joinedBannerHeader}>
+                <View style={styles.joinedStatusBadge}>
+                  <Text style={styles.joinedBannerText}>
+                    ✓ Terdaftar di Slot #{myParticipant?.slot || '1'} {isHostUser ? '(Host)' : ''}
+                  </Text>
+                </View>
+                {!isHostUser && (
+                  <TouchableOpacity
+                    style={[styles.leaveSlotBtn, isLeaving && styles.btnDisabled]}
+                    activeOpacity={0.7}
+                    onPress={handleLeaveSlot}
+                    disabled={isLeaving}
+                  >
+                    {isLeaving ? (
+                      <ActivityIndicator size="small" color="#FF6B6B" />
+                    ) : (
+                      <Text style={styles.leaveSlotBtnText}>✕ Batalkan Slot</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
               <Text style={styles.joinedSubtext}>
-                Tiba di lapangan 15 menit sebelum kickoff untuk persiapan mabar.
+                {isHostUser
+                  ? 'Anda adalah Host sesi ini. Kelola kesiapan pemain dan pembagian tim.'
+                  : 'Tiba di lapangan 15 menit sebelum kickoff. Jika berhalangan, batalkan slot agar pemain lain bisa masuk.'}
               </Text>
             </View>
           ) : (
@@ -1349,10 +1432,20 @@ const styles = StyleSheet.create({
   joinedBanner: {
     backgroundColor: THEME.colors.cardElevated,
     borderWidth: 1,
-    borderColor: THEME.colors.success,
+    borderColor: 'rgba(34, 197, 94, 0.35)',
     borderRadius: 12,
-    padding: 14,
-    alignItems: 'center'
+    padding: 12
+  },
+  joinedBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6
+  },
+  joinedStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1
   },
   joinedBannerText: {
     fontFamily: THEME.typography.fonts.bold,
@@ -1360,12 +1453,28 @@ const styles = StyleSheet.create({
     color: THEME.colors.success,
     includeFontPadding: false
   },
+  leaveSlotBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8
+  },
+  leaveSlotBtnText: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 11,
+    color: '#FF6B6B',
+    includeFontPadding: false
+  },
   joinedSubtext: {
     fontFamily: THEME.typography.fonts.regular,
     fontSize: 11,
     color: THEME.colors.textSecondary,
-    marginTop: 4,
-    textAlign: 'center',
+    lineHeight: 16,
     includeFontPadding: false
   },
   btnJoinPrimary: {
