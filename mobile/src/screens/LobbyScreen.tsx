@@ -15,6 +15,7 @@ import { THEME } from '../theme';
 import { RootStackScreenProps } from '../navigation/types';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 import RatingModal from '../components/RatingModal';
+import PlayerCard from '../components/PlayerCard';
 import { api, ApiSession } from '../services/api';
 import type { ApiReviewTarget, SubmitReviewItem } from '../services/api';
 import { supabase } from '../services/supabase';
@@ -322,6 +323,20 @@ export default function LobbyScreen({ route, navigation }: Props) {
   const venueTotalCost = currentSession?.estimated_cost_total || 300000;
   const currentCostPerPlayer = Math.round(venueTotalCost / Math.max(participants.length, 1));
   const fullTargetCostPerPlayer = Math.round(venueTotalCost / totalSlots);
+
+  const filteredParticipants = useMemo(() => {
+    if (activeTeamTab === 'all') return participants;
+    return participants.filter((p) => p.team === activeTeamTab);
+  }, [participants, activeTeamTab]);
+
+  const emptySlotNumbers = useMemo(() => {
+    const filled = new Set(participants.map((p) => p.slot));
+    return Array.from({ length: totalSlots }, (_, i) => i + 1).filter(
+      (s) => !filled.has(s)
+    );
+  }, [participants, totalSlots]);
+
+  const nextAvailableSlot = emptySlotNumbers.length > 0 ? emptySlotNumbers[0] : null;
 
   const kickoffInfo = formatKickoffTime(currentSession?.start_time);
   const venueTitle =
@@ -670,107 +685,135 @@ export default function LobbyScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        {/* Player Slot List */}
+        {/* Player Roster Grid & Slots */}
         {!isLoading && (
-          <View style={styles.rosterList}>
-            {Array.from({ length: totalSlots }, (_, i) => i + 1).map((slotNum) => {
-              const player = participants.find((p) => p.slot === slotNum);
+          <View style={styles.rosterSection}>
+            {/* 1. Grid Player Cards (2 Kolom) */}
+            {filteredParticipants.length > 0 ? (
+              <View style={styles.playerCardGrid}>
+                {filteredParticipants.map((player) => (
+                  <View key={player.slot} style={styles.playerCardGridItem}>
+                    <PlayerCard
+                      slot={player.slot}
+                      name={player.name}
+                      role={player.role}
+                      ovr={player.ovr}
+                      creditScore={player.karma}
+                      team={player.team}
+                      isHost={player.isHost}
+                      isCurrentUser={player.userId === user?.id}
+                      onPress={() =>
+                        showAlert(
+                          'info',
+                          `${player.name} (${player.team === 'A' ? 'Tim A' : 'Tim B'})`,
+                          `Role: ${player.role}\nOVR: ${player.ovr} · Credit Score: ${player.karma}/100\nStatus: ${
+                            player.isHost ? 'Host / Penyelenggara Match' : 'Pemain Terverifikasi'
+                          }`
+                        )
+                      }
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyTeamStateCard}>
+                <Text style={styles.emptyTeamStateIcon}>
+                  {activeTeamTab === 'A' ? '🔵' : '🔴'}
+                </Text>
+                <Text style={styles.emptyTeamStateTitle}>
+                  Belum Ada Pemain di {activeTeamTab === 'A' ? 'Tim A' : 'Tim B'}
+                </Text>
+                <Text style={styles.emptyTeamStateSubtitle}>
+                  Jalankan Balanced Team Splitter untuk membagi tim secara seimbang atau undang teman.
+                </Text>
+              </View>
+            )}
 
-              // Filter by team if selected
-              if (activeTeamTab !== 'all' && player && player.team !== activeTeamTab) {
-                return null;
-              }
-
-              if (player) {
-                const initials = player.name.slice(0, 2).toUpperCase();
-                const isTeamA = player.team === 'A';
-
-                return (
-                  <View
-                    key={slotNum}
-                    style={[
-                      styles.playerCardFilled,
-                      isTeamA ? styles.borderTeamA : styles.borderTeamB
-                    ]}
+            {/* 2. Slot Kosong & Action Area */}
+            {activeTeamTab === 'all' && emptySlotNumbers.length > 0 && (
+              <View style={styles.emptySlotSection}>
+                {/* Hero Action Card untuk Slot Berikutnya */}
+                {!hasJoined ? (
+                  <TouchableOpacity
+                    style={styles.nextSlotActionCard}
+                    activeOpacity={0.8}
+                    onPress={handleJoinSlot}
+                    disabled={isJoining}
                   >
-                    <View style={styles.playerSlotBadge}>
-                      <Text style={styles.playerSlotText}>#{slotNum}</Text>
+                    <View style={styles.nextSlotIconCircle}>
+                      <Text style={styles.nextSlotIconText}>➕</Text>
                     </View>
-
-                    <View
-                      style={[
-                        styles.playerAvatar,
-                        isTeamA ? styles.avatarTeamA : styles.avatarTeamB
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.playerAvatarText,
-                          isTeamA ? styles.avatarTextTeamA : styles.avatarTextTeamB
-                        ]}
-                      >
-                        {initials}
+                    <View style={styles.nextSlotTextCol}>
+                      <Text style={styles.nextSlotTitle}>
+                        Kunci Slot #{nextAvailableSlot} Sekarang
+                      </Text>
+                      <Text style={styles.nextSlotSubtitle}>
+                        Tersisa {emptySlotNumbers.length} slot terbuka · Row-Level Lock
                       </Text>
                     </View>
+                    <View style={styles.nextSlotBtnPill}>
+                      {isJoining ? (
+                        <ActivityIndicator size="small" color={THEME.colors.textOnPrimary} />
+                      ) : (
+                        <Text style={styles.nextSlotBtnText}>Gabung</Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.inviteSlotActionCard}
+                    activeOpacity={0.8}
+                    onPress={handleShareInvite}
+                  >
+                    <View style={styles.inviteSlotIconCircle}>
+                      <Text style={styles.inviteSlotIconText}>🔗</Text>
+                    </View>
+                    <View style={styles.nextSlotTextCol}>
+                      <Text style={styles.inviteSlotTitle}>
+                        Ajak Teman untuk Slot #{nextAvailableSlot}
+                      </Text>
+                      <Text style={styles.nextSlotSubtitle}>
+                        Tersisa {emptySlotNumbers.length} slot lagi sebelum sesi penuh
+                      </Text>
+                    </View>
+                    <View style={styles.inviteSlotBtnPill}>
+                      <Text style={styles.inviteSlotBtnText}>Undang</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
 
-                    <View style={styles.playerDetails}>
-                      <View style={styles.playerNameRow}>
-                        <Text style={styles.playerName} numberOfLines={1}>
-                          {player.name}
-                        </Text>
-                        {player.isHost && (
-                          <View style={styles.hostBadge}>
-                            <Text style={styles.hostBadgeText}>HOST</Text>
-                          </View>
-                        )}
-                        <View
-                          style={[
-                            styles.teamTag,
-                            isTeamA ? styles.teamTagA : styles.teamTagB
-                          ]}
+                {/* Compact Remaining Slots Tracker */}
+                {emptySlotNumbers.length > 1 && (
+                  <View style={styles.compactRemainingBar}>
+                    <Text style={styles.compactRemainingLabel}>
+                      Slot Terbuka:
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.emptyPillsScroll}
+                    >
+                      {emptySlotNumbers.slice(1).map((s) => (
+                        <TouchableOpacity
+                          key={s}
+                          style={styles.emptySlotMiniPill}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            if (!hasJoined) {
+                              handleJoinSlot();
+                            } else {
+                              handleShareInvite();
+                            }
+                          }}
                         >
-                          <Text
-                            style={[
-                              styles.teamTagText,
-                              isTeamA ? styles.teamTagTextA : styles.teamTagTextB
-                            ]}
-                          >
-                            {isTeamA ? 'TIM A' : 'TIM B'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.playerRole}>{player.role}</Text>
-                    </View>
-
-                    <View style={styles.playerStats}>
-                      <View style={styles.ovrBadge}>
-                        <Text style={styles.ovrText}>OVR {player.ovr}</Text>
-                      </View>
-                      <Text style={styles.karmaText}>🛡️ {player.karma}</Text>
-                    </View>
+                          <Text style={styles.emptySlotMiniText}>#{s} Available</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
                   </View>
-                );
-              }
-
-              // Empty Slot
-              return (
-                <View key={slotNum} style={styles.playerCardEmpty}>
-                  <View style={styles.emptySlotBadge}>
-                    <Text style={styles.emptySlotText}>#{slotNum}</Text>
-                  </View>
-                  <View style={styles.emptyAvatar}>
-                    <Text style={styles.emptyAvatarText}>?</Text>
-                  </View>
-                  <View style={styles.playerDetails}>
-                    <Text style={styles.emptySlotTitle}>Slot Kosong #{slotNum}</Text>
-                    <Text style={styles.emptySlotSubtitle}>Menunggu pemain bergabung...</Text>
-                  </View>
-                  <View style={styles.readyBadge}>
-                    <Text style={styles.readyBadgeText}>Available</Text>
-                  </View>
-                </View>
-              );
-            })}
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -1146,209 +1189,189 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary
   },
 
-  // Roster List
-  rosterList: {
-    gap: 8,
+  // Roster Grid Section (Bento Player Cards)
+  rosterSection: {
     marginBottom: 16
   },
-  playerCardFilled: {
+  playerCardGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginHorizontal: -4
+  },
+  playerCardGridItem: {
+    width: '50%',
+    padding: 4
+  },
+
+  // Empty State untuk filter Tim yang belum ada pemain
+  emptyTeamStateCard: {
     backgroundColor: THEME.colors.card,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    padding: 10
-  },
-  borderTeamA: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#38BDF8'
-  },
-  borderTeamB: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#F43F5E'
-  },
-  playerSlotBadge: {
-    width: 28,
+    borderStyle: 'dashed',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    marginBottom: 10
   },
-  playerSlotText: {
+  emptyTeamStateIcon: {
+    fontSize: 24,
+    marginBottom: 8
+  },
+  emptyTeamStateTitle: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textMuted,
+    fontSize: 13,
+    color: THEME.colors.text,
+    textAlign: 'center',
     includeFontPadding: false
   },
-  playerAvatar: {
+  emptyTeamStateSubtitle: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 12,
+    lineHeight: 16,
+    includeFontPadding: false
+  },
+
+  // Slot Kosong & Action Section
+  emptySlotSection: {
+    marginTop: 6,
+    gap: 8
+  },
+  nextSlotActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(213, 255, 64, 0.04)',
+    borderRadius: 10,
+    borderWidth: 1.2,
+    borderColor: THEME.colors.primary,
+    borderStyle: 'dashed',
+    paddingVertical: 10,
+    paddingHorizontal: 12
+  },
+  nextSlotIconCircle: {
     width: 32,
     height: 32,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1.5,
-    borderColor: THEME.colors.primary,
+    borderRadius: 16,
+    backgroundColor: 'rgba(213, 255, 64, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10
   },
-  avatarTeamA: {
-    borderColor: '#38BDF8'
+  nextSlotIconText: {
+    fontSize: 14
   },
-  avatarTeamB: {
-    borderColor: '#F43F5E'
-  },
-  playerAvatarText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 11,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  avatarTextTeamA: {
-    color: '#38BDF8'
-  },
-  avatarTextTeamB: {
-    color: '#F43F5E'
-  },
-  playerDetails: {
+  nextSlotTextCol: {
     flex: 1
   },
-  playerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  playerName: {
+  nextSlotTitle: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 12,
     color: THEME.colors.text,
     includeFontPadding: false
   },
-  hostBadge: {
-    backgroundColor: 'rgba(213, 255, 64, 0.15)',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3
-  },
-  hostBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 8,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  teamTag: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3
-  },
-  teamTagA: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)'
-  },
-  teamTagB: {
-    backgroundColor: 'rgba(244, 63, 94, 0.15)'
-  },
-  teamTagText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 8,
-    includeFontPadding: false
-  },
-  teamTagTextA: {
-    color: '#38BDF8'
-  },
-  teamTagTextB: {
-    color: '#F43F5E'
-  },
-  playerRole: {
+  nextSlotSubtitle: {
     fontFamily: THEME.typography.fonts.regular,
     fontSize: 10,
-    color: THEME.colors.textSecondary,
+    color: THEME.colors.textMuted,
     marginTop: 2,
     includeFontPadding: false
   },
-  playerStats: {
-    alignItems: 'flex-end',
-    gap: 2
+  nextSlotBtnPill: {
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6
   },
-  ovrBadge: {
-    backgroundColor: THEME.colors.cardElevated,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4
-  },
-  ovrText: {
+  nextSlotBtnText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  karmaText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 10,
-    color: THEME.colors.success,
+    fontSize: 11,
+    color: THEME.colors.textOnPrimary,
     includeFontPadding: false
   },
 
-  // Empty Slot Card
-  playerCardEmpty: {
+  inviteSlotActionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(18, 20, 26, 0.4)',
+    backgroundColor: 'rgba(94, 92, 230, 0.06)',
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(192, 194, 184, 0.12)',
+    borderWidth: 1.2,
+    borderColor: THEME.colors.accent,
     borderStyle: 'dashed',
-    padding: 10
+    paddingVertical: 10,
+    paddingHorizontal: 12
   },
-  emptySlotBadge: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptySlotText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
-  },
-  emptyAvatar: {
+  inviteSlotIconCircle: {
     width: 32,
     height: 32,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderStyle: 'dashed',
+    borderRadius: 16,
+    backgroundColor: 'rgba(94, 92, 230, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10
   },
-  emptyAvatarText: {
+  inviteSlotIconText: {
+    fontSize: 14
+  },
+  inviteSlotTitle: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 12,
-    color: THEME.colors.textMuted,
+    color: THEME.colors.text,
     includeFontPadding: false
   },
-  emptySlotTitle: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
-  },
-  emptySlotSubtitle: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
-    color: THEME.colors.textMuted,
-    marginTop: 2,
-    includeFontPadding: false
-  },
-  readyBadge: {
-    backgroundColor: 'rgba(0, 245, 155, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  inviteSlotBtnPill: {
+    backgroundColor: THEME.colors.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 6
   },
-  readyBadgeText: {
+  inviteSlotBtnText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 11,
+    color: '#FFFFFF',
+    includeFontPadding: false
+  },
+
+  // Compact Remaining Slots Tracker
+  compactRemainingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.colors.cardElevated,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    paddingVertical: 7,
+    paddingHorizontal: 10
+  },
+  compactRemainingLabel: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 10,
-    color: THEME.colors.success,
+    color: THEME.colors.textMuted,
+    marginRight: 8,
+    includeFontPadding: false
+  },
+  emptyPillsScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center'
+  },
+  emptySlotMiniPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(192, 194, 184, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  emptySlotMiniText: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 9.5,
+    color: THEME.colors.textSecondary,
     includeFontPadding: false
   },
 

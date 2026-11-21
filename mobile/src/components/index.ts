@@ -21,3 +21,6 @@ export type { RatingModalProps } from './RatingModal';
 
 export { default as RadarChart } from './RadarChart';
 export type { RadarDataPoint } from './RadarChart';
+
+export { default as PlayerCard } from './PlayerCard';
+export type { PlayerCardProps } from './PlayerCard';
