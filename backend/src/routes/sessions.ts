@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { supabase } from '../db/supabase';
+import { authMiddleware, AuthVariables } from '../middleware/auth';
 import { splitTeams, PlayerInput } from '../services/teamSplitter';
 import {
   buildReviewRuleEntries,
@@ -19,7 +20,7 @@ import {
   updateSessionStatusSchema
 } from '../types/sessions';
 
-export const sessionRouter = new Hono();
+export const sessionRouter = new Hono<{ Variables: AuthVariables }>();
 
 // GET /api/sessions - Feed Play Now & Scheduled (FR-04)
 sessionRouter.get('/', async (c) => {
@@ -160,19 +161,20 @@ sessionRouter.post('/leave', async (c) => {
   }
 });
 
-// POST /api/sessions/:id/teams/split - Balanced Team Splitter (FR-07)
-sessionRouter.post('/:id/teams/split', async (c) => {
+// POST /api/sessions/:id/teams/split - Balanced Team Splitter (FR-07, Host-Only)
+sessionRouter.post('/:id/teams/split', authMiddleware, async (c) => {
   const sessionId = c.req.param('id');
+  const authUser = c.get('user');
 
   if (!sessionId) {
     return c.json({ success: false, error: 'Parameter session_id wajib disertakan.' }, 400);
   }
 
   try {
-    // 1. Validasi keberadaan sesi
+    // 1. Validasi keberadaan sesi, kepemilikan host, & status sesi
     const { data: session, error: sessionErr } = await supabase
       .from('sessions')
-      .select('id, activity_type, status')
+      .select('id, host_id, activity_type, status')
       .eq('id', sessionId)
       .maybeSingle();
 
@@ -182,6 +184,26 @@ sessionRouter.post('/:id/teams/split', async (c) => {
 
     if (!session) {
       return c.json({ success: false, error: 'Sesi tidak ditemukan.' }, 404);
+    }
+
+    if (session.host_id !== authUser.id) {
+      return c.json(
+        {
+          success: false,
+          error: 'Hanya host pemilik sesi yang berhak menjalankan pembagian tim.'
+        },
+        403
+      );
+    }
+
+    if (session.status === 'COMPLETED' || session.status === 'CANCELLED') {
+      return c.json(
+        {
+          success: false,
+          error: `Tidak dapat membagi tim pada sesi yang berstatus ${session.status}.`
+        },
+        400
+      );
     }
 
     // 2. Ambil daftar peserta sesi aktif

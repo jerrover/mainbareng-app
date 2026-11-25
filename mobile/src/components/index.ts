@@ -24,3 +24,6 @@ export type { RadarDataPoint } from './RadarChart';
 
 export { default as PlayerCard } from './PlayerCard';
 export type { PlayerCardProps } from './PlayerCard';
+
+export { default as LobbyHeroHeader } from './LobbyHeroHeader';
+export type { LobbyHeroHeaderProps } from './LobbyHeroHeader';
