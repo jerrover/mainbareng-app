@@ -8,6 +8,7 @@ import {
   ViewStyle,
   Platform
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { THEME } from '../theme';
 import { getPointGrade } from './RadarChart';
 
@@ -38,8 +39,7 @@ export default function PlayerCard({
 }: PlayerCardProps) {
   const isTeamA = team === 'A';
   const teamColor = isTeamA ? '#38BDF8' : '#F43F5E';
-  const teamBg = isTeamA ? 'rgba(56, 189, 248, 0.12)' : 'rgba(244, 63, 94, 0.12)';
-  const teamBorder = isTeamA ? 'rgba(56, 189, 248, 0.35)' : 'rgba(244, 63, 94, 0.35)';
+  const avatarRing = isTeamA ? 'rgba(56, 189, 248, 0.5)' : 'rgba(244, 63, 94, 0.5)';
 
   const initials = name
     .trim()
@@ -49,85 +49,77 @@ export default function PlayerCard({
     .slice(0, 2)
     .toUpperCase();
 
+  const slotStr = String(slot).padStart(2, '0');
   const ovrTier = getPointGrade(ovr);
+  const creditColor = creditScore >= 90 ? '#C0C2B8' : THEME.colors.warning;
 
   return (
     <TouchableOpacity
       style={[
         styles.cardContainer,
-        { borderTopColor: teamColor },
         isCurrentUser && styles.currentUserBorder,
         style
       ]}
-      activeOpacity={onPress ? 0.75 : 1}
+      activeOpacity={onPress ? 0.78 : 1}
       onPress={onPress}
     >
-      {/* Top Header: Slot Tag & Team Badge */}
-      <View style={styles.headerRow}>
-        <View style={styles.slotPill}>
-          <Text style={styles.slotText}>#{slot}</Text>
-        </View>
+      {/* Short Team Top Accent Notch (28px) */}
+      <View style={[styles.topNotch, { backgroundColor: teamColor }]} />
 
-        <View style={[styles.teamBadge, { backgroundColor: teamBg, borderColor: teamBorder }]}>
-          <Text style={[styles.teamBadgeText, { color: teamColor }]}>
-            {isTeamA ? '🔵 TIM A' : '🔴 TIM B'}
-          </Text>
-        </View>
-      </View>
+      {/* Ghost Jersey Slot Number */}
+      <Text style={styles.ghostSlotText} pointerEvents="none">
+        {slotStr}
+      </Text>
 
-      {/* Center: Avatar & Player Info */}
-      <View style={styles.playerInfoRow}>
-        <View style={[styles.avatar, { borderColor: teamColor }]}>
+      {/* Top Row: Avatar (Left) vs Sculptural OVR (Right) */}
+      <View style={styles.topRow}>
+        <View style={[styles.avatar, { borderColor: avatarRing }]}>
           <Text style={[styles.avatarText, { color: teamColor }]}>{initials}</Text>
         </View>
 
-        <View style={styles.nameBlock}>
-          <View style={styles.nameRow}>
-            <Text style={styles.playerName} numberOfLines={1}>
-              {name}
-            </Text>
-            {isHost && (
-              <View style={styles.hostBadge}>
-                <Text style={styles.hostBadgeText}>HOST</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.playerRole} numberOfLines={1}>
-            {role || 'Flex Player'}
-          </Text>
+        <View style={styles.ovrBlock}>
+          <Text style={styles.ovrValue}>{ovr}</Text>
+          <Text style={styles.ovrLabel}>OVR · {ovrTier.grade}</Text>
         </View>
       </View>
 
-      {/* Divider */}
-      <View style={styles.cardDivider} />
+      {/* Middle: Name + Inline Host/Self Tag + Role */}
+      <View style={styles.identityBlock}>
+        <View style={styles.nameRow}>
+          <Text style={styles.playerName} numberOfLines={1}>
+            {name}
+          </Text>
+          {isHost ? (
+            <Text style={styles.hostInlineTag}>· Host</Text>
+          ) : isCurrentUser ? (
+            <Text style={styles.selfInlineTag}>· Kamu</Text>
+          ) : null}
+        </View>
+        <Text style={styles.playerRole} numberOfLines={1}>
+          {role || 'Flex Player'}
+        </Text>
+      </View>
 
-      {/* Bottom Metrics: OVR Tier + Credit Score */}
-      <View style={styles.metricsRow}>
-        {/* OVR Chip */}
-        <View
-          style={[
-            styles.ovrChip,
-            {
-              backgroundColor: `${ovrTier.color}15`,
-              borderColor: `${ovrTier.color}40`
-            }
-          ]}
-        >
-          <Text style={[styles.ovrNumber, { color: ovrTier.color }]}>
-            {ovr}{' '}
-            <Text style={styles.ovrTierLetter}>({ovrTier.grade})</Text>
+      {/* Bottom Hairline Rail: Team Label + SVG Shield Credit Score */}
+      <View style={styles.bottomRail}>
+        <View style={styles.teamLabelRow}>
+          <View style={[styles.teamDot, { backgroundColor: teamColor }]} />
+          <Text style={[styles.teamLabelText, { color: teamColor }]}>
+            Tim {team}
           </Text>
         </View>
 
-        {/* Credit Score Shield */}
         <View style={styles.creditChip}>
-          <Text style={styles.creditIcon}>🛡️</Text>
-          <Text
-            style={[
-              styles.creditValue,
-              { color: creditScore >= 90 ? THEME.colors.success : THEME.colors.warning }
-            ]}
-          >
+          <Svg width={11} height={11} viewBox="0 0 24 24" fill="none">
+            <Path
+              d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+              stroke="#8A94A6"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+          <Text style={[styles.creditValue, { color: creditColor }]}>
             {creditScore}
           </Text>
         </View>
@@ -140,72 +132,84 @@ const styles = StyleSheet.create({
   cardContainer: {
     flex: 1,
     minWidth: 150,
-    backgroundColor: THEME.colors.card,
-    borderRadius: 12,
+    minHeight: 132,
+    backgroundColor: '#141720',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderTopWidth: 3,
-    padding: 10,
-    justifyContent: 'space-between'
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
+    padding: 13,
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+    position: 'relative'
   },
   currentUserBorder: {
-    borderColor: THEME.colors.primary,
+    borderColor: 'rgba(213, 255, 64, 0.45)',
     backgroundColor: 'rgba(213, 255, 64, 0.03)'
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
+  topNotch: {
+    position: 'absolute',
+    top: 0,
+    left: 14,
+    width: 28,
+    height: 2.5,
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 2
   },
-  slotPill: {
-    backgroundColor: THEME.colors.cardElevated,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4
-  },
-  slotText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.textMuted,
+  ghostSlotText: {
+    position: 'absolute',
+    bottom: -6,
+    right: 6,
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 48,
+    color: 'rgba(255, 255, 255, 0.035)',
+    letterSpacing: -2,
+    fontVariant: ['tabular-nums'],
     includeFontPadding: false
   },
-  teamBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 0.8
-  },
-  teamBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 8.5,
-    letterSpacing: 0.3,
-    includeFontPadding: false
-  },
-  playerInfoRow: {
+
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8
+    justifyContent: 'space-between'
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: THEME.colors.cardElevated,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1B1F2B',
     borderWidth: 1.5,
     alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
+    justifyContent: 'center'
   },
   avatarText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
     fontWeight: '700',
-    fontSize: 11,
+    fontSize: 12,
     includeFontPadding: false
   },
-  nameBlock: {
-    flex: 1
+  ovrBlock: {
+    alignItems: 'flex-end'
+  },
+  ovrValue: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 21,
+    color: '#FFFFFF',
+    lineHeight: 23,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  ovrLabel: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 9.5,
+    color: THEME.colors.textMuted,
+    letterSpacing: 0.5,
+    marginTop: 1,
+    includeFontPadding: false
+  },
+
+  identityBlock: {
+    marginTop: 10
   },
   nameRow: {
     flexDirection: 'row',
@@ -214,67 +218,66 @@ const styles = StyleSheet.create({
   },
   playerName: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: THEME.colors.text,
     flexShrink: 1,
     includeFontPadding: false
   },
-  hostBadge: {
-    backgroundColor: 'rgba(213, 255, 64, 0.18)',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3
-  },
-  hostBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 7.5,
+  hostInlineTag: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 10.5,
     color: THEME.colors.primary,
+    flexShrink: 0,
+    includeFontPadding: false
+  },
+  selfInlineTag: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 10.5,
+    color: THEME.colors.success,
+    flexShrink: 0,
     includeFontPadding: false
   },
   playerRole: {
     fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: THEME.colors.textMuted,
-    marginTop: 1,
+    marginTop: 2,
     includeFontPadding: false
   },
-  cardDivider: {
-    height: 1,
-    backgroundColor: THEME.colors.cardBorder,
-    marginVertical: 4
-  },
-  metricsRow: {
+
+  bottomRail: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)'
   },
-  ovrChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-    borderRadius: 5,
-    borderWidth: 1
+  teamLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5
   },
-  ovrNumber: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
+  teamDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3
+  },
+  teamLabelText: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 11,
     includeFontPadding: false
-  },
-  ovrTierLetter: {
-    fontSize: 9,
-    fontFamily: THEME.typography.fonts.bold
   },
   creditChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3
-  },
-  creditIcon: {
-    fontSize: 10
+    gap: 4
   },
   creditValue: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10.5,
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
     includeFontPadding: false
   }
 });

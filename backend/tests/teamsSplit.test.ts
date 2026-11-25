@@ -5,13 +5,19 @@ jest.mock('../src/db/supabase', () => {
   return {
     supabase: {
       from: jest.fn(),
-      rpc: jest.fn()
+      rpc: jest.fn(),
+      auth: {
+        getUser: jest.fn()
+      }
     }
   };
 });
 
 describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (FR-07)', () => {
   const mockFrom = supabase.from as jest.Mock;
+  const mockGetUser = supabase.auth.getUser as jest.Mock;
+  const hostId = 'u-host-1';
+  const authHeaders = { Authorization: 'Bearer valid-host-token' };
 
   const createQueryBuilder = (result: any) => {
     const builder: any = {
@@ -32,6 +38,20 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: hostId, email: 'host@mabar.id' } },
+      error: null
+    });
+  });
+
+  it('should return 401 when request is unauthenticated', async () => {
+    const res = await app.request('/api/sessions/sess-unauth/teams/split', {
+      method: 'POST'
+    });
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.success).toBe(false);
   });
 
   it('should return 404 when session is not found', async () => {
@@ -43,7 +63,8 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
     });
 
     const res = await app.request('/api/sessions/00000000-0000-0000-0000-000000000000/teams/split', {
-      method: 'POST'
+      method: 'POST',
+      headers: authHeaders
     });
 
     expect(res.status).toBe(404);
@@ -52,11 +73,60 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
     expect(body.error).toContain('Sesi tidak ditemukan');
   });
 
+  it('should return 403 when authenticated user is not the session host', async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'u-non-host', email: 'player@mabar.id' } },
+      error: null
+    });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'sessions') {
+        return createQueryBuilder({
+          data: { id: 'sess-host-guard', host_id: hostId, activity_type: 'futsal', status: 'OPEN' },
+          error: null
+        });
+      }
+      return createQueryBuilder({ data: [], error: null });
+    });
+
+    const res = await app.request('/api/sessions/sess-host-guard/teams/split', {
+      method: 'POST',
+      headers: authHeaders
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('Hanya host pemilik sesi');
+  });
+
+  it('should return 400 when session status is COMPLETED or CANCELLED', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'sessions') {
+        return createQueryBuilder({
+          data: { id: 'sess-completed', host_id: hostId, activity_type: 'futsal', status: 'COMPLETED' },
+          error: null
+        });
+      }
+      return createQueryBuilder({ data: [], error: null });
+    });
+
+    const res = await app.request('/api/sessions/sess-completed/teams/split', {
+      method: 'POST',
+      headers: authHeaders
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('COMPLETED');
+  });
+
   it('should return 400 when session has fewer than 2 participants', async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'sessions') {
         return createQueryBuilder({
-          data: { id: 'sess-single', activity_type: 'futsal', status: 'OPEN' },
+          data: { id: 'sess-single', host_id: hostId, activity_type: 'futsal', status: 'OPEN' },
           error: null
         });
       }
@@ -66,11 +136,11 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
             {
               id: 'part-1',
               session_id: 'sess-single',
-              user_id: 'u-1',
+              user_id: hostId,
               slot_number: 1,
               assigned_team: null,
               attendance_status: 'CONFIRMED',
-              profiles: { id: 'u-1', full_name: 'Solo Player', credit_score: 95 }
+              profiles: { id: hostId, full_name: 'Solo Player', credit_score: 95 }
             }
           ],
           error: null
@@ -80,7 +150,8 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
     });
 
     const res = await app.request('/api/sessions/sess-single/teams/split', {
-      method: 'POST'
+      method: 'POST',
+      headers: authHeaders
     });
 
     expect(res.status).toBe(400);
@@ -93,7 +164,7 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
     mockFrom.mockImplementation((table: string) => {
       if (table === 'sessions') {
         return createQueryBuilder({
-          data: { id: 'sess-success', activity_type: 'badminton', status: 'OPEN' },
+          data: { id: 'sess-success', host_id: hostId, activity_type: 'badminton', status: 'OPEN' },
           error: null
         });
       }
@@ -103,11 +174,11 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
             {
               id: 'part-1',
               session_id: 'sess-success',
-              user_id: 'u-1',
+              user_id: hostId,
               slot_number: 1,
               assigned_team: null,
               attendance_status: 'CONFIRMED',
-              profiles: { id: 'u-1', full_name: 'Player One', credit_score: 100 }
+              profiles: { id: hostId, full_name: 'Player One', credit_score: 100 }
             },
             {
               id: 'part-2',
@@ -143,7 +214,7 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
       if (table === 'user_activity_profiles') {
         return createQueryBuilder({
           data: [
-            { user_id: 'u-1', skill_rating_points: 1500 },
+            { user_id: hostId, skill_rating_points: 1500 },
             { user_id: 'u-2', skill_rating_points: 1400 },
             { user_id: 'u-3', skill_rating_points: 1300 },
             { user_id: 'u-4', skill_rating_points: 1200 }
@@ -155,7 +226,8 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
     });
 
     const res = await app.request('/api/sessions/sess-success/teams/split', {
-      method: 'POST'
+      method: 'POST',
+      headers: authHeaders
     });
 
     expect(res.status).toBe(200);
@@ -199,7 +271,8 @@ describe('POST /api/sessions/:id/teams/split - Balanced Team Splitter Endpoint (
     });
 
     const res = await app.request('/api/sessions/sess-err/teams/split', {
-      method: 'POST'
+      method: 'POST',
+      headers: authHeaders
     });
 
     expect(res.status).toBe(500);
