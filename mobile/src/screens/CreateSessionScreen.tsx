@@ -555,7 +555,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
                     2 Tim ({Math.floor(quota / 2)}v{Math.floor(quota / 2)} Seimbang)
                   </Text>
                   <Text style={styles.formatDesc}>
-                    Algoritma membagi tim otomatis seimbang saat slot lobi terisi.
+                    Tim dibagi rata otomatis saat slot penuh.
                   </Text>
                 </TouchableOpacity>
 
@@ -576,7 +576,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
                     Casual / Santai
                   </Text>
                   <Text style={styles.formatDesc}>
-                    Bebas tukar pemain mandiri tanpa intervensi penyeimbangan skor.
+                    Pemain bebas atur dan tukar tim sendiri.
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -801,7 +801,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
             {/* Field: Jam Kickoff */}
             <View style={styles.fieldSection}>
               <View style={styles.fieldHeader}>
-                <Text style={styles.fieldEyebrow}>WAKTU MULAI KICKOFF</Text>
+                <Text style={styles.fieldEyebrow}>WAKTU MULAI</Text>
                 <Text style={styles.timeValueText}>{selectedTime} WIB</Text>
               </View>
               <View style={styles.quickChipsGrid}>
@@ -927,13 +927,13 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
                 ))}
               </View>
               <Text style={styles.creditHelper}>
-                Pemain dengan reputasi mangkir di bawah skor ini tidak akan bisa masuk ke dalam lobi mabar.
+                Pemain dengan Credit Score di bawah batas ini tidak bisa bergabung.
               </Text>
             </View>
 
             {/* Ticket Preview Card */}
             <View style={styles.previewSection}>
-              <Text style={styles.fieldEyebrow}>PREVIEW SESSION PASS</Text>
+              <Text style={styles.fieldEyebrow}>PRATINJAU SESI</Text>
               <BentoCard
                 eyebrow={`${sport.toUpperCase()} · ${Math.floor(quota / 2)}v${Math.floor(quota / 2)}`}
                 title={title || 'Sesi Mabar Baru'}
@@ -954,7 +954,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
                   filled={1}
                   total={quota}
                   variant={sport === 'Badminton' ? 'badminton' : 'futsal'}
-                  label="HOST OTOMATIS TERDAFTAR DI SLOT #1"
+                  label="HOST LANGSUNG MASUK DI SLOT #1"
                   groups={2}
                 />
               </BentoCard>
@@ -968,12 +968,12 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
         <CustomButton
           label={
             isSubmitting
-              ? 'Mempublikasikan Sesi...'
+              ? 'Membuat Sesi...'
               : step === 1
               ? 'Lanjut · Lokasi & Biaya ➔'
               : step === 2
               ? 'Lanjut · Konfirmasi ➔'
-              : 'Publikasikan Sesi Mabar 🚀'
+              : 'Buat Sesi'
           }
           disabled={isSubmitting}
           loading={isSubmitting}

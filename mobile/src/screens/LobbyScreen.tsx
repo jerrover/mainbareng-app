@@ -410,8 +410,8 @@ export default function LobbyScreen({ route, navigation }: Props) {
     if (!currentSession?.id) {
       showAlert(
         'info',
-        'AI Team Balancer (Simulasi) ⚖️',
-        'Algoritma telah menyeimbangkan komposisi Tim A dan Tim B berdasarkan skill rating dan credit score.'
+        'Tim Sudah Dibagi',
+        'Tim A dan Tim B sudah dibagi rata sesuai rating dan Credit Score.'
       );
       return;
     }
@@ -457,7 +457,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
   // 3. Action: Join Slot (Atomic Supabase Join API)
   const handleJoinSlot = async () => {
     if (hasJoined) {
-      showAlert('info', 'Sudah Terdaftar', 'Anda sudah mengunci slot di sesi mabar ini.');
+      showAlert('info', 'Sudah Terdaftar', 'Kamu sudah terdaftar di sesi ini.');
       return;
     }
 
@@ -467,7 +467,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
     }
 
     if (!user) {
-      showAlert('warning', 'Login Diperlukan', 'Silakan login terlebih dahulu untuk bergabung ke sesi ini.');
+      showAlert('warning', 'Login Diperlukan', 'Masuk dulu untuk bergabung ke sesi ini.');
       return;
     }
 
@@ -477,14 +477,14 @@ export default function LobbyScreen({ route, navigation }: Props) {
       const newPlayer: Player = {
         slot: nextSlot,
         userId: user.id,
-        name: user.user_metadata?.full_name || 'Anda (Saya)',
+        name: user.user_metadata?.full_name || 'Kamu (Saya)',
         role: 'Flex Player',
         ovr: 85,
         karma: 100,
         team: null
       };
       setParticipants([...participants, newPlayer]);
-      showAlert('success', 'Slot Berhasil Dikunci!', `Selamat! Slot #${nextSlot} berhasil dikunci. Menunggu Host membagi tim.`);
+      showAlert('success', 'Slot Berhasil Diambil', `Berhasil masuk di Slot #${nextSlot}. Menunggu Host membagi tim.`);
       return;
     }
 
@@ -493,8 +493,8 @@ export default function LobbyScreen({ route, navigation }: Props) {
       const res = await api.joinSession(currentSession.id, user.id);
       showAlert(
         'success',
-        'Slot Berhasil Dikunci! 🔒',
-        `Selamat! Slot #${res.slot_number} berhasil dikunci secara atomik dengan row-level lock di Supabase.`
+        'Slot Berhasil Diambil',
+        `Berhasil masuk di Slot #${res.slot_number}.`
       );
       await loadSessionAndRoster(false);
     } catch (err: any) {
@@ -512,7 +512,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
     }
 
     if (hasJoined) {
-      showAlert('info', 'Sudah Terdaftar', 'Anda sudah mengunci slot di sesi mabar ini.');
+      showAlert('info', 'Sudah Terdaftar', 'Kamu sudah terdaftar di sesi ini.');
       return;
     }
 
@@ -522,7 +522,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
     }
 
     if (!user) {
-      showAlert('warning', 'Login Diperlukan', 'Silakan login terlebih dahulu untuk bergabung ke sesi ini.');
+      showAlert('warning', 'Login Diperlukan', 'Masuk dulu untuk bergabung ke sesi ini.');
       return;
     }
 
@@ -530,13 +530,13 @@ export default function LobbyScreen({ route, navigation }: Props) {
     const matchTitle = currentSession?.title || routeSessionTitle || 'Sesi Mabar';
     const costLabel =
       venueTotalCost > 0
-        ? `⚡ Est. Patungan Rp ${fullTargetCostPerPlayer.toLocaleString('id-ID')} / org`
-        : '⚡ Sesi Bebas Biaya (Gratis)';
+        ? `Est. Patungan Rp ${fullTargetCostPerPlayer.toLocaleString('id-ID')} / org`
+        : 'Gratis';
 
     showConfirm({
       type: 'info',
       title: 'Gabung ke Sesi Ini?',
-      message: `Anda akan mengunci ${slotLabel} pada match "${matchTitle}".`,
+      message: `Kamu akan masuk ke ${slotLabel} di sesi "${matchTitle}".`,
       contextBadge: costLabel,
       primaryButtonText: `Ya, Gabung (${slotLabel})`,
       secondaryButtonText: 'Nanti Dulu',
@@ -555,18 +555,18 @@ export default function LobbyScreen({ route, navigation }: Props) {
       showAlert(
         'warning',
         'Host Tidak Dapat Keluar',
-        'Sebagai Host, Anda tidak dapat membatalkan slot begitu saja. Anda dapat Membatalkan Sesi jika berhalangan hadir.'
+        'Host tidak bisa langsung keluar dari slot. Batalkan sesi jika berhalangan hadir.'
       );
       return;
     }
 
-    const slotLabel = myParticipant?.slot ? `Slot #${myParticipant.slot}` : 'Slot Anda';
+    const slotLabel = myParticipant?.slot ? `Slot #${myParticipant.slot}` : 'Slot kamu';
 
     showConfirm({
       type: 'warning',
       title: 'Batalkan Keikutsertaan?',
       message: `${slotLabel} akan dilepas kembali ke publik. Susunan tim dan alokasi slot akan di-reset.`,
-      contextBadge: `⚠️ ${slotLabel} Akan Dikosongkan`,
+      contextBadge: `${slotLabel} Akan Dikosongkan`,
       primaryButtonText: 'Ya, Batalkan Slot',
       secondaryButtonText: 'Tetap Ikut di Sesi Ini',
       onConfirm: async () => {
@@ -576,7 +576,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
         if (!currentSession?.id) {
           // Local fallback
           setParticipants(participants.filter((p) => p.userId !== user.id));
-          showAlert('success', 'Slot Dibatalkan', 'Anda telah keluar dari sesi mabar ini.');
+          showAlert('success', 'Slot Dibatalkan', 'Kamu sudah keluar dari sesi ini.');
           return;
         }
 
@@ -957,10 +957,10 @@ export default function LobbyScreen({ route, navigation }: Props) {
                 <Text style={styles.emptyTeamStateSubtitle}>
                   {participants.every((p) => p.team === null)
                     ? isHostUser
-                      ? 'Tim belum di-split. Jalankan Balanced Team Splitter untuk membagi Tim A & Tim B.'
-                      : 'Tim belum di-split oleh Host. Komposisi Tim A & Tim B akan muncul setelah dibagi.'
+                      ? 'Tim belum dibagi. Jalankan Bagi Tim Seimbang untuk membagi Tim A & Tim B.'
+                      : 'Tim belum dibagi oleh Host. Komposisi Tim A & Tim B akan muncul setelah dibagi.'
                     : isHostUser
-                    ? 'Jalankan Balanced Team Splitter untuk menyeimbangkan komposisi tim.'
+                    ? 'Jalankan Bagi Tim Seimbang untuk menyeimbangkan komposisi tim.'
                     : 'Menunggu Host mengatur komposisi tim.'}
                 </Text>
               </View>
@@ -989,7 +989,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
                     strokeLinejoin="round"
                   />
                 </Svg>
-                <Text style={styles.balancerBtnText}>Jalankan Balanced Team Splitter</Text>
+                <Text style={styles.balancerBtnText}>Bagi Tim Seimbang</Text>
               </View>
             )}
           </TouchableOpacity>

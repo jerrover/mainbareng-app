@@ -296,7 +296,7 @@ export default function VenuesScreen({ navigation }: Props) {
         {/* Top App Bar (Figma SCR-10 191:13) */}
         <View style={styles.topAppBar}>
           <View style={styles.titleBox}>
-            <Text style={styles.headerTitle}>Katalog Venue & GOR</Text>
+            <Text style={styles.headerTitle}>Daftar Venue</Text>
             <Text style={styles.headerSubtitle}>
               Pilihan Lapangan Olahraga Terverifikasi
             </Text>

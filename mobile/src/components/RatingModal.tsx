@@ -151,7 +151,7 @@ export default function RatingModal({
 
           <View style={styles.notice}>
             <Text style={styles.noticeText}>
-              Nilai teman main lu dengan jujur — penilaian ini yang menaikkan atau menurunkan
+              Nilai teman main kamu dengan jujur — penilaian ini yang memengaruhi
               Credit Score mereka.
             </Text>
           </View>
@@ -159,14 +159,14 @@ export default function RatingModal({
           {loading ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>Memuat peserta…</Text>
-              <Text style={styles.emptyBody}>Sebentar ya, lagi ngambil daftar teman main lu.</Text>
+              <Text style={styles.emptyBody}>Sebentar ya, lagi memuat daftar teman main kamu.</Text>
             </View>
           ) : targets.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🛡️</Text>
               <Text style={styles.emptyTitle}>Belum ada yang bisa dinilai</Text>
               <Text style={styles.emptyBody}>
-                Semua peserta sesi ini sudah lu nilai, atau belum ada peserta lain yang join.
+                Semua peserta sesi ini sudah kamu nilai, atau belum ada peserta lain yang bergabung.
               </Text>
             </View>
           ) : (
