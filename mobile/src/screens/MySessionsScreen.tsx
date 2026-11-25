@@ -58,33 +58,33 @@ function formatKickoff(isoDateStr?: string | null): { time: string; dayLabel: st
 }
 
 function getUrgencyBadge(isoDateStr?: string | null): { label: string; isUrgent: boolean } {
-  if (!isoDateStr) return { label: '📅 TERJADWAL', isUrgent: false };
+  if (!isoDateStr) return { label: 'TERJADWAL', isUrgent: false };
   try {
     const d = new Date(isoDateStr);
     const now = new Date();
     const diffMs = d.getTime() - now.getTime();
 
     if (diffMs < 0) {
-      return { label: '⚡ SEDANG BERLANGSUNG', isUrgent: true };
+      return { label: 'BERLANGSUNG', isUrgent: true };
     }
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
     if (diffHours < 1) {
-      return { label: `⚡ KICKOFF ${Math.max(1, diffMins)} MENIT LAGI`, isUrgent: true };
+      return { label: `MULAI ${Math.max(1, diffMins)} MENIT LAGI`, isUrgent: true };
     } else if (diffHours <= 3) {
-      return { label: `⚡ KICKOFF ${diffHours} JAM LAGI`, isUrgent: true };
+      return { label: `MULAI ${diffHours} JAM LAGI`, isUrgent: true };
     } else if (
       d.getDate() === now.getDate() &&
       d.getMonth() === now.getMonth() &&
       d.getFullYear() === now.getFullYear()
     ) {
-      return { label: '⚡ KICKOFF HARI INI', isUrgent: true };
+      return { label: 'HARI INI', isUrgent: true };
     } else {
-      return { label: '📅 TERJADWAL', isUrgent: false };
+      return { label: 'TERJADWAL', isUrgent: false };
     }
   } catch {
-    return { label: '📅 TERJADWAL', isUrgent: false };
+    return { label: 'TERJADWAL', isUrgent: false };
   }
 }
 
@@ -274,7 +274,7 @@ export default function MySessionsScreen({ navigation }: Props) {
       <View style={styles.topAppBar}>
         <View style={styles.headerTitleBox}>
           <Text style={styles.headerTitle}>Sesi Saya</Text>
-          <Text style={styles.headerSubtitle}>Lacak Jadwal & Rekam Jejak Mabar</Text>
+          <Text style={styles.headerSubtitle}>Jadwal & riwayat sesi</Text>
         </View>
 
         <TouchableOpacity
