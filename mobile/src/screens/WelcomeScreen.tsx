@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity
+  TouchableOpacity,
+  useWindowDimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent
 } from 'react-native';
+import Svg, { Path, Circle, Line, Polyline } from 'react-native-svg';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { THEME } from '../theme';
@@ -13,8 +17,174 @@ import { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
 
+interface HeroSlide {
+  id: string;
+  tag: string;
+  title: string;
+  subtitle: string;
+  chips: string[];
+}
+
+const HERO_SLIDES: HeroSlide[] = [
+  {
+    id: 'discover',
+    tag: 'JADWAL MABAR',
+    title: 'Cari Sesi Terdekat',
+    subtitle:
+      'Lihat jadwal futsal, badminton, basket, sampai MLBB yang lagi butuh pemain di sekitar Tangerang.',
+    chips: ['Futsal', 'Badminton', 'Basket', 'MLBB', 'Valorant']
+  },
+  {
+    id: 'reputation',
+    tag: 'CREDIT SCORE',
+    title: 'Main Bareng Pemain Terpercaya',
+    subtitle:
+      'Setiap pemain punya Credit Score dari riwayat sesi sebelumnya untuk bantu jaga komitmen hadir.',
+    chips: ['Credit Score', 'Check-in QR', 'Rating Teman']
+  },
+  {
+    id: 'matchmaking',
+    tag: 'TIM & PATUNGAN',
+    title: 'Main Seru dengan Tim Seimbang',
+    subtitle:
+      'Susunan tim disesuaikan level main, dan biaya sewa langsung dibagi per orang.',
+    chips: ['Bagi Tim', 'Level Main', 'Patungan']
+  }
+];
+
+function ShieldIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function UsersIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle
+        cx={9}
+        cy={7}
+        r={4}
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M23 21v-2a4 4 0 0 0-3-3.87"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M16 3.13a4 4 0 0 1 0 7.75"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function WalletIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function ArrowRightIcon({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Line
+        x1={5}
+        y1={12}
+        x2={19}
+        y2={12}
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Polyline
+        points="12 5 19 12 12 19"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+const AUTO_SCROLL_INTERVAL_MS = 4000;
+
 export default function WelcomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const carouselRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (isDragging || screenWidth <= 0) return;
+
+    const timer = setTimeout(() => {
+      const nextIndex = (activeSlide + 1) % HERO_SLIDES.length;
+      setActiveSlide(nextIndex);
+      carouselRef.current?.scrollTo({ x: nextIndex * screenWidth, animated: true });
+    }, AUTO_SCROLL_INTERVAL_MS);
+
+    return () => clearTimeout(timer);
+  }, [activeSlide, isDragging, screenWidth]);
+
+  const syncActiveSlideFromOffset = (offsetX: number) => {
+    if (screenWidth <= 0) return;
+    const nextIndex = Math.round(offsetX / screenWidth);
+    const clamped = Math.max(0, Math.min(HERO_SLIDES.length - 1, nextIndex));
+    setActiveSlide(clamped);
+  };
+
+  const handleSlideEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setIsDragging(false);
+    syncActiveSlideFromOffset(event.nativeEvent.contentOffset.x);
+  };
+
+  const handleSelectSlide = (index: number) => {
+    setActiveSlide(index);
+    carouselRef.current?.scrollTo({ x: index * screenWidth, animated: true });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -22,83 +192,102 @@ export default function WelcomeScreen({ navigation }: Props) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Card (Figma 95:6) */}
-        <View style={styles.heroCard}>
-          <View style={styles.tagBadge}>
-            <Text style={styles.tagBadgeText}>MABAR APP ECOSYSTEM</Text>
-          </View>
+        {/* 3-Slide Horizontal Hero Carousel (Figma 95:6) */}
+        <ScrollView
+          ref={carouselRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          onScrollBeginDrag={() => setIsDragging(true)}
+          onScrollEndDrag={(e) => {
+            setIsDragging(false);
+            syncActiveSlideFromOffset(e.nativeEvent.contentOffset.x);
+          }}
+          onMomentumScrollEnd={handleSlideEnd}
+          scrollEventThrottle={16}
+          style={styles.carousel}
+        >
+          {HERO_SLIDES.map((slide) => (
+            <View key={slide.id} style={{ width: screenWidth, paddingHorizontal: 16 }}>
+              <View style={styles.heroCard}>
+                <View>
+                  <View style={styles.tagBadge}>
+                    <Text style={styles.tagBadgeText}>{slide.tag}</Text>
+                  </View>
 
-          <Text style={styles.heroTitle}>MAIN BARENG YUKK!</Text>
+                  <Text style={styles.heroTitle}>{slide.title}</Text>
 
-          <Text style={styles.heroSubtitle}>
-            Temukan teman main futsal, badminton, basket, MLBB, dan Valorant tanpa ribet!
-          </Text>
+                  <Text style={styles.heroSubtitle}>{slide.subtitle}</Text>
+                </View>
 
-          {/* Sports Chips Row (Figma 95:14) */}
-          <View style={styles.sportsRow}>
-            <View style={styles.sportChip}>
-              <Text style={styles.sportChipText}>⚽ Futsal</Text>
+                <View style={styles.sportsRow}>
+                  {slide.chips.map((chip) => (
+                    <View key={chip} style={styles.sportChip}>
+                      <Text style={styles.sportChipText}>{chip}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
             </View>
-            <View style={styles.sportChip}>
-              <Text style={styles.sportChipText}>🏸 Badminton</Text>
-            </View>
-            <View style={styles.sportChip}>
-              <Text style={styles.sportChipText}>🎮 MLBB</Text>
-            </View>
-            <View style={styles.sportChip}>
-              <Text style={styles.sportChipText}>🎯 Valorant</Text>
-            </View>
-          </View>
-        </View>
+          ))}
+        </ScrollView>
 
         {/* Carousel Indicators / Pips (Figma 95:23) */}
         <View style={styles.pipsRow}>
-          <View style={[styles.pip, styles.pipActive]} />
-          <View style={styles.pip} />
-          <View style={styles.pip} />
+          {HERO_SLIDES.map((slide, index) => (
+            <TouchableOpacity
+              key={slide.id}
+              activeOpacity={0.8}
+              onPress={() => handleSelectSlide(index)}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            >
+              <View style={[styles.pip, activeSlide === index && styles.pipActive]} />
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Value Prop Section Header (Figma 95:27) */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Main Tanpa Khawatir Ghosting</Text>
+          <Text style={styles.sectionTitle}>Cara Kerja Mabar</Text>
           <Text style={styles.sectionSubtitle}>
-            Ekosistem matchmaking dengan reputasi transparan dan tim seimbang.
+            Aturan lobi, pembagian tim, dan hitung iuran sebelum kamu datang ke lapangan.
           </Text>
         </View>
 
         {/* 3 Benefit Cards (Figma 95:30, 95:36, 95:42) */}
         <View style={styles.benefitCard}>
           <View style={[styles.benefitIconBox, styles.iconShieldBg]}>
-            <Text style={styles.benefitIcon}>🛡️</Text>
+            <ShieldIcon color={THEME.colors.success} />
           </View>
           <View style={styles.benefitTextBox}>
-            <Text style={styles.benefitTitle}>Credit Score Anti-Ghosting</Text>
+            <Text style={styles.benefitTitle}>Credit Score</Text>
             <Text style={styles.benefitDesc}>
-              Sanksi penalti -20 poin & cooldown jika absen sepihak.
+              Tidak hadir tanpa kabar memotong 20 poin dan membatasi akses gabung sementara.
             </Text>
           </View>
         </View>
 
         <View style={styles.benefitCard}>
           <View style={[styles.benefitIconBox, styles.iconBoltBg]}>
-            <Text style={styles.benefitIcon}>⚡</Text>
+            <UsersIcon color={THEME.colors.primary} />
           </View>
           <View style={styles.benefitTextBox}>
-            <Text style={styles.benefitTitle}>AI-Powered Team Balancer</Text>
+            <Text style={styles.benefitTitle}>Bagi Tim Seimbang</Text>
             <Text style={styles.benefitDesc}>
-              Bagi dua tim otomatis secara adil berbasis skill & role.
+              Susunan tim diatur dari rating dan posisi masing-masing pemain.
             </Text>
           </View>
         </View>
 
         <View style={styles.benefitCard}>
           <View style={[styles.benefitIconBox, styles.iconMoneyBg]}>
-            <Text style={styles.benefitIcon}>💸</Text>
+            <WalletIcon color={THEME.colors.warning} />
           </View>
           <View style={styles.benefitTextBox}>
-            <Text style={styles.benefitTitle}>Kalkulator Patungan Transparan</Text>
+            <Text style={styles.benefitTitle}>Patungan Otomatis</Text>
             <Text style={styles.benefitDesc}>
-              Hitung otomatis iuran sewa lapangan per orang tanpa nombok.
+              Nominal sewa lapangan langsung dibagi jumlah kuota sejak kamu masuk lobi.
             </Text>
           </View>
         </View>
@@ -111,7 +300,8 @@ export default function WelcomeScreen({ navigation }: Props) {
           activeOpacity={0.85}
           onPress={() => navigation.navigate('Auth', { initialMode: 'signup' })}
         >
-          <Text style={styles.btnPrimaryText}>Mulai Sekarang →</Text>
+          <Text style={styles.btnPrimaryText}>Buat Akun</Text>
+          <ArrowRightIcon color={THEME.colors.textOnPrimary} />
         </TouchableOpacity>
 
         <View style={styles.footerLinkRow}>
@@ -120,7 +310,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             activeOpacity={0.7}
             onPress={() => navigation.navigate('Auth', { initialMode: 'signin' })}
           >
-            <Text style={styles.footerLinkAction}>Masuk di sini</Text>
+            <Text style={styles.footerLinkAction}>Masuk</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -137,15 +327,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 24
   },
+  carousel: {
+    marginBottom: 16
+  },
   heroCard: {
+    flex: 1,
     backgroundColor: THEME.colors.card,
     borderWidth: 1,
     borderColor: 'rgba(213, 255, 64, 0.35)',
     borderRadius: 16,
     paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginHorizontal: 16,
-    marginBottom: 16
+    paddingVertical: 16
   },
   tagBadge: {
     backgroundColor: 'rgba(213, 255, 64, 0.15)',
@@ -268,10 +460,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 159, 10, 0.4)'
   },
-  benefitIcon: {
-    fontSize: 18,
-    includeFontPadding: false
-  },
   benefitTextBox: {
     flex: 1
   },
@@ -303,8 +491,10 @@ const styles = StyleSheet.create({
     height: 48,
     backgroundColor: THEME.colors.primary,
     borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
     marginBottom: 12
   },
   btnPrimaryText: {
