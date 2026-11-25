@@ -33,7 +33,7 @@ interface Player {
   role: string;
   ovr: number;
   karma: number;
-  team: 'A' | 'B';
+  team: 'A' | 'B' | null;
   isHost?: boolean;
   isGuest?: boolean;
 }
@@ -256,10 +256,14 @@ export default function LobbyScreen({ route, navigation }: Props) {
             const points = 1200;
             const ovr = Math.min(99, Math.max(60, Math.round(points / 15)));
 
-            // Team A atau Team B
-            const rawTeam = p.assigned_team || '';
-            const team: 'A' | 'B' =
-              rawTeam.toUpperCase().includes('B') || rawTeam === 'Team B' ? 'B' : 'A';
+            // Biarkan null jika Host belum menjalankan Team Splitter
+            const rawTeam = (p.assigned_team || '').trim().toUpperCase();
+            const team: 'A' | 'B' | null =
+              rawTeam === 'TEAM A' || rawTeam === 'A'
+                ? 'A'
+                : rawTeam === 'TEAM B' || rawTeam === 'B'
+                ? 'B'
+                : null;
 
             return {
               id: p.id,
@@ -288,7 +292,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
               role: 'Host / Kapten',
               ovr: 88,
               karma: hostKarma,
-              team: 'A',
+              team: null,
               isHost: true
             }
           ]);
@@ -357,6 +361,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
     return currentSession.host_id === user.id;
   }, [currentSession, user]);
 
+  const isEffectivelyJoined = hasJoined || isHostUser;
   const isSessionCancelled = currentSession?.status === 'CANCELLED';
 
   const myParticipant = useMemo(() => {
@@ -469,7 +474,6 @@ export default function LobbyScreen({ route, navigation }: Props) {
     if (!currentSession?.id) {
       // Local fallback
       const nextSlot = participants.length + 1;
-      const assignedTeam: 'A' | 'B' = nextSlot % 2 === 1 ? 'A' : 'B';
       const newPlayer: Player = {
         slot: nextSlot,
         userId: user.id,
@@ -477,10 +481,10 @@ export default function LobbyScreen({ route, navigation }: Props) {
         role: 'Flex Player',
         ovr: 85,
         karma: 100,
-        team: assignedTeam
+        team: null
       };
       setParticipants([...participants, newPlayer]);
-      showAlert('success', 'Slot Berhasil Diambil', `Berhasil masuk di Slot #${nextSlot} (${assignedTeam === 'A' ? 'Tim A' : 'Tim B'}).`);
+      showAlert('success', 'Slot Berhasil Diambil', `Berhasil masuk di Slot #${nextSlot}. Menunggu Host membagi tim.`);
       return;
     }
 
@@ -822,7 +826,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
         {/* Player Roster Grid & Slots */}
         {!isLoading && (
           <View style={styles.rosterSection}>
-            {/* 1. Grid Player Cards + Card Slot Kosong (2 Kolom Simetris) */}
+            {/* 1. Grid Player Cards + 1 Unified Empty Slot Card (Gabung / Undang Rekan) */}
             {filteredParticipants.length > 0 || (activeTeamTab === 'all' && emptySlotNumbers.length > 0 && !isSessionCancelled) ? (
               <View style={styles.playerCardGrid}>
                 {filteredParticipants.map((player) => (
@@ -839,7 +843,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
                       onPress={() =>
                         showAlert(
                           'info',
-                          `${player.name} (${player.team === 'A' ? 'Tim A' : 'Tim B'})`,
+                          `${player.name} (${player.team ? `Tim ${player.team}` : 'Belum Dibagi'})`,
                           `Role: ${player.role}\nOVR: ${player.ovr} · Credit Score: ${player.karma}/100\nStatus: ${
                             player.isHost ? 'Host / Penyelenggara Match' : 'Pemain Terverifikasi'
                           }`
@@ -849,88 +853,115 @@ export default function LobbyScreen({ route, navigation }: Props) {
                   </View>
                 ))}
 
-                {/* Card Slot Kosong Interaktif di dalam Grid 2-Kolom */}
+                {/* 1 Card Gabungan (Gabung saat belum join / Undang Rekan saat sudah join) */}
                 {activeTeamTab === 'all' && emptySlotNumbers.length > 0 && !isSessionCancelled && (
-                  <>
-                    <View style={styles.playerCardGridItem}>
-                      <TouchableOpacity
+                  <View
+                    style={
+                      filteredParticipants.length % 2 === 1
+                        ? styles.playerCardGridItem
+                        : styles.playerCardGridItemFull
+                    }
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.emptySlotCard,
+                        !isEffectivelyJoined ? styles.emptySlotCardJoin : styles.emptySlotCardInvite
+                      ]}
+                      activeOpacity={0.75}
+                      onPress={!isEffectivelyJoined ? handlePromptJoinSlot : handleShareInvite}
+                      disabled={isJoining}
+                    >
+                      <View
                         style={[
-                          styles.emptySlotCard,
-                          !hasJoined ? styles.emptySlotCardJoin : styles.emptySlotCardInvite
+                          styles.emptySlotPlusCircle,
+                          !isEffectivelyJoined ? styles.emptySlotPlusCircleJoin : styles.emptySlotPlusCircleInvite
                         ]}
-                        activeOpacity={0.75}
-                        onPress={!hasJoined ? handlePromptJoinSlot : handleShareInvite}
-                        disabled={isJoining}
                       >
-                        <View
-                          style={[
-                            styles.emptySlotPlusCircle,
-                            !hasJoined ? styles.emptySlotPlusCircleJoin : styles.emptySlotPlusCircleInvite
-                          ]}
-                        >
-                          {isJoining ? (
-                            <ActivityIndicator size="small" color={THEME.colors.primary} />
-                          ) : (
-                            <Text
-                              style={[
-                                styles.emptySlotPlusText,
-                                !hasJoined ? styles.emptySlotPlusTextJoin : styles.emptySlotPlusTextInvite
-                              ]}
-                            >
-                              {!hasJoined ? '+' : '🔗'}
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={styles.emptySlotCardTitle}>Kosong</Text>
-                        <Text style={styles.emptySlotCardSubtitle}>
-                          {!hasJoined ? `Gabung Slot #${nextAvailableSlot}` : `Undang ke Slot #${nextAvailableSlot}`}
-                        </Text>
-                        {emptySlotNumbers.length > 1 && (
-                          <Text
-                            style={[
-                              styles.emptySlotCardHint,
-                              !hasJoined ? styles.emptySlotCardHintJoin : styles.emptySlotCardHintInvite
-                            ]}
-                          >
-                            Sisa {emptySlotNumbers.length} slot
-                          </Text>
+                        {isJoining ? (
+                          <ActivityIndicator size="small" color={THEME.colors.primary} />
+                        ) : !isEffectivelyJoined ? (
+                          <Text style={[styles.emptySlotPlusText, styles.emptySlotPlusTextJoin]}>+</Text>
+                        ) : (
+                          <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                            <Path
+                              d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                              stroke="#C0C2B8"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <Circle cx="8.5" cy="7" r="4" stroke="#C0C2B8" strokeWidth={1.8} />
+                            <Line x1="20" y1="8" x2="20" y2="14" stroke="#C0C2B8" strokeWidth={1.8} strokeLinecap="round" />
+                            <Line x1="23" y1="11" x2="17" y2="11" stroke="#C0C2B8" strokeWidth={1.8} strokeLinecap="round" />
+                          </Svg>
                         )}
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Penyeimbang baris ke-2 bila jumlah pemain genap & sisa >= 2 */}
-                    {filteredParticipants.length % 2 === 0 && emptySlotNumbers.length >= 2 && (
-                      <View style={styles.playerCardGridItem}>
-                        <TouchableOpacity
-                          style={[styles.emptySlotCard, styles.emptySlotCardInvite]}
-                          activeOpacity={0.75}
-                          onPress={handleShareInvite}
-                        >
-                          <View style={[styles.emptySlotPlusCircle, styles.emptySlotPlusCircleInvite]}>
-                            <Text style={[styles.emptySlotPlusText, styles.emptySlotPlusTextInvite]}>
-                              🔗
-                            </Text>
-                          </View>
-                          <Text style={styles.emptySlotCardTitle}>
-                            +{emptySlotNumbers.length - 1} Slot Lagi
-                          </Text>
-                          <Text style={styles.emptySlotCardSubtitle}>Ajak rekan mabar</Text>
-                        </TouchableOpacity>
                       </View>
-                    )}
-                  </>
+                      <Text style={styles.emptySlotCardTitle}>
+                        {!isEffectivelyJoined
+                          ? 'Kosong'
+                          : `Sisa ${emptySlotNumbers.length} Slot Kosong`}
+                      </Text>
+                      <Text style={styles.emptySlotCardSubtitle}>
+                        {!isEffectivelyJoined
+                          ? `Gabung Slot #${nextAvailableSlot}`
+                          : 'Undang rekan mabar ke match'}
+                      </Text>
+                      {!isEffectivelyJoined && emptySlotNumbers.length > 1 && (
+                        <Text style={[styles.emptySlotCardHint, styles.emptySlotCardHintJoin]}>
+                          Sisa {emptySlotNumbers.length} slot
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             ) : (
               <View style={styles.emptyTeamStateCard}>
-                <Text style={styles.emptyTeamStateIcon}>
-                  {activeTeamTab === 'A' ? '🔵' : '🔴'}
-                </Text>
+                <View
+                  style={[
+                    styles.emptyTeamIconWrap,
+                    {
+                      borderColor:
+                        activeTeamTab === 'A'
+                          ? 'rgba(56, 189, 248, 0.35)'
+                          : 'rgba(244, 63, 94, 0.35)',
+                      backgroundColor:
+                        activeTeamTab === 'A'
+                          ? 'rgba(56, 189, 248, 0.10)'
+                          : 'rgba(244, 63, 94, 0.10)'
+                    }
+                  ]}
+                >
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                      stroke={activeTeamTab === 'A' ? '#38BDF8' : '#F43F5E'}
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <Circle
+                      cx="9"
+                      cy="7"
+                      r="4"
+                      stroke={activeTeamTab === 'A' ? '#38BDF8' : '#F43F5E'}
+                      strokeWidth={1.8}
+                    />
+                  </Svg>
+                </View>
                 <Text style={styles.emptyTeamStateTitle}>
-                  Belum Ada Pemain di {activeTeamTab === 'A' ? 'Tim A' : 'Tim B'}
+                  {participants.every((p) => p.team === null)
+                    ? 'Tim Belum Dibagi'
+                    : `Belum Ada Pemain di Tim ${activeTeamTab}`}
                 </Text>
                 <Text style={styles.emptyTeamStateSubtitle}>
-                  Bagi tim otomatis atau undang teman dulu.
+                  {participants.every((p) => p.team === null)
+                    ? isHostUser
+                      ? 'Tim belum dibagi. Jalankan Bagi Tim Seimbang untuk membagi Tim A & Tim B.'
+                      : 'Tim belum dibagi oleh Host. Komposisi Tim A & Tim B akan muncul setelah dibagi.'
+                    : isHostUser
+                    ? 'Jalankan Bagi Tim Seimbang untuk menyeimbangkan komposisi tim.'
+                    : 'Menunggu Host mengatur komposisi tim.'}
                 </Text>
               </View>
             )}
@@ -948,24 +979,24 @@ export default function LobbyScreen({ route, navigation }: Props) {
             {isSplitting ? (
               <ActivityIndicator size="small" color={THEME.colors.primary} />
             ) : (
-              <Text style={styles.balancerBtnText}>
-                Bagi Tim Seimbang
-              </Text>
+              <View style={styles.actionBtnInner}>
+                <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"
+                    stroke={THEME.colors.primary}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+                <Text style={styles.balancerBtnText}>Bagi Tim Seimbang</Text>
+              </View>
             )}
           </TouchableOpacity>
         )}
 
-        {/* Share Invite Button */}
-        <TouchableOpacity
-          style={styles.shareBtn}
-          activeOpacity={0.8}
-          onPress={handleShareInvite}
-        >
-          <Text style={styles.shareBtnText}>Bagikan Undangan Sesi</Text>
-        </TouchableOpacity>
-
-        {/* Action Footer (Tampil saat Sesi Batal / Siap Review / Sudah Bergabung) */}
-        {(isSessionCancelled || canReview || hasJoined) && (
+        {/* Action Footer: Dipisah jadi 2 Blok (Blok 1: Status Terkonfirmasi, Blok 2: Aksi Batal Terpisah) */}
+        {(isSessionCancelled || canReview || isEffectivelyJoined) && (
           <View style={styles.footerActionBox}>
             {isSessionCancelled ? (
               <View style={styles.cancelledMatchBanner}>
@@ -992,126 +1023,128 @@ export default function LobbyScreen({ route, navigation }: Props) {
                 <Text style={styles.ratingCtaText}>Beri Rating &amp; Sportivitas ⭐</Text>
               </TouchableOpacity>
             ) : (
-              <View style={styles.joinedBanner}>
-                {/* Top Row: Mint Check Badge + Slot Status + Team Tag */}
-                <View style={styles.joinedBannerHeader}>
-                  <View style={styles.joinedCheckBadge}>
-                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                      <Path
-                        d="M20 6L9 17l-5-5"
-                        stroke={THEME.colors.success}
-                        strokeWidth={2.4}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
-                  </View>
+              <>
+                {/* BLOK 1: Kartu Status Partisipasi (Murni Info Positif) */}
+                <View style={styles.joinedBanner}>
+                  <View style={styles.joinedBannerHeader}>
+                    <View style={styles.joinedCheckBadge}>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                        <Path
+                          d="M20 6L9 17l-5-5"
+                          stroke={THEME.colors.success}
+                          strokeWidth={2.4}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </Svg>
+                    </View>
 
-                  <View style={styles.joinedTextCol}>
-                    <Text style={styles.joinedBannerText}>
-                      Slot #{myParticipant?.slot || '1'} Terkonfirmasi
-                      {isHostUser ? ' · Host' : ''}
-                    </Text>
-                    <Text style={styles.joinedSubtext}>
-                      {isHostUser
-                        ? 'Kelola kesiapan pemain & pembagian tim'
-                        : 'Check-in 15 mnt sebelum kickoff'}
-                    </Text>
-                  </View>
-
-                  {myParticipant?.team && (
-                    <View
-                      style={[
-                        styles.joinedTeamTag,
-                        {
-                          borderColor:
-                            myParticipant.team === 'A'
-                              ? 'rgba(56, 189, 248, 0.35)'
-                              : 'rgba(244, 63, 94, 0.35)',
-                          backgroundColor:
-                            myParticipant.team === 'A'
-                              ? 'rgba(56, 189, 248, 0.10)'
-                              : 'rgba(244, 63, 94, 0.10)'
-                        }
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.joinedTeamTagText,
-                          { color: myParticipant.team === 'A' ? '#38BDF8' : '#F43F5E' }
-                        ]}
-                      >
-                        Tim {myParticipant.team}
+                    <View style={styles.joinedTextCol}>
+                      <Text style={styles.joinedBannerText}>
+                        Slot #{myParticipant?.slot || '1'} Terkonfirmasi
+                        {isHostUser ? ' · Host' : ''}
+                      </Text>
+                      <Text style={styles.joinedSubtext}>
+                        {isHostUser
+                          ? 'Kelola kesiapan pemain & pembagian tim'
+                          : 'Check-in 15 mnt sebelum kickoff'}
                       </Text>
                     </View>
-                  )}
+
+                    {myParticipant?.team && (
+                      <View
+                        style={[
+                          styles.joinedTeamTag,
+                          {
+                            borderColor:
+                              myParticipant.team === 'A'
+                                ? 'rgba(56, 189, 248, 0.35)'
+                                : 'rgba(244, 63, 94, 0.35)',
+                            backgroundColor:
+                              myParticipant.team === 'A'
+                                ? 'rgba(56, 189, 248, 0.10)'
+                                : 'rgba(244, 63, 94, 0.10)'
+                          }
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.joinedTeamTagText,
+                            { color: myParticipant.team === 'A' ? '#38BDF8' : '#F43F5E' }
+                          ]}
+                        >
+                          Tim {myParticipant.team}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
 
-                {/* Bottom Action Strip (Clean Full-Width Destructive Button) */}
-                <View style={styles.joinedDivider} />
-
-                {!isHostUser ? (
-                  <TouchableOpacity
-                    style={[styles.leaveSlotBtn, isLeaving && styles.btnDisabled]}
-                    activeOpacity={0.75}
-                    onPress={handleLeaveSlot}
-                    disabled={isLeaving}
-                  >
-                    {isLeaving ? (
-                      <ActivityIndicator size="small" color="#FF6B6B" />
-                    ) : (
-                      <>
-                        <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                          <Path
-                            d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-                            stroke="#FF6B6B"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <Path
-                            d="M16 17l5-5-5-5"
-                            stroke="#FF6B6B"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <Line
-                            x1="21"
-                            y1="12"
-                            x2="9"
-                            y2="12"
-                            stroke="#FF6B6B"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                          />
-                        </Svg>
-                        <Text style={styles.leaveSlotBtnText}>Batalkan Keikutsertaan</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.cancelSessionBtn, isCancellingSession && styles.btnDisabled]}
-                    activeOpacity={0.75}
-                    onPress={handleCancelSession}
-                    disabled={isCancellingSession}
-                  >
-                    {isCancellingSession ? (
-                      <ActivityIndicator size="small" color="#FF6B6B" />
-                    ) : (
-                      <>
-                        <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                          <Circle cx="12" cy="12" r="10" stroke="#FF6B6B" strokeWidth={2} />
-                          <Line x1="15" y1="9" x2="9" y2="15" stroke="#FF6B6B" strokeWidth={2} strokeLinecap="round" />
-                          <Line x1="9" y1="9" x2="15" y2="15" stroke="#FF6B6B" strokeWidth={2} strokeLinecap="round" />
-                        </Svg>
-                        <Text style={styles.cancelSessionBtnText}>Batalkan Seluruh Sesi</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
+                {/* BLOK 2: Tombol Destruktif Terpisah di Bawah (Tidak Menempel di Kartu Status) */}
+                <View style={styles.leaveActionBox}>
+                  {!isHostUser ? (
+                    <TouchableOpacity
+                      style={[styles.leaveSlotBtn, isLeaving && styles.btnDisabled]}
+                      activeOpacity={0.75}
+                      onPress={handleLeaveSlot}
+                      disabled={isLeaving}
+                    >
+                      {isLeaving ? (
+                        <ActivityIndicator size="small" color="#FF6B6B" />
+                      ) : (
+                        <>
+                          <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                            <Path
+                              d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+                              stroke="#FF6B6B"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <Path
+                              d="M16 17l5-5-5-5"
+                              stroke="#FF6B6B"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <Line
+                              x1="21"
+                              y1="12"
+                              x2="9"
+                              y2="12"
+                              stroke="#FF6B6B"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                            />
+                          </Svg>
+                          <Text style={styles.leaveSlotBtnText}>Batalkan Keikutsertaan</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.cancelSessionBtn, isCancellingSession && styles.btnDisabled]}
+                      activeOpacity={0.75}
+                      onPress={handleCancelSession}
+                      disabled={isCancellingSession}
+                    >
+                      {isCancellingSession ? (
+                        <ActivityIndicator size="small" color="#FF6B6B" />
+                      ) : (
+                        <>
+                          <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                            <Circle cx="12" cy="12" r="10" stroke="#FF6B6B" strokeWidth={2} />
+                            <Line x1="15" y1="9" x2="9" y2="15" stroke="#FF6B6B" strokeWidth={2} strokeLinecap="round" />
+                            <Line x1="9" y1="9" x2="15" y2="15" stroke="#FF6B6B" strokeWidth={2} strokeLinecap="round" />
+                          </Svg>
+                          <Text style={styles.cancelSessionBtnText}>Batalkan Seluruh Sesi</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
             )}
           </View>
         )}
@@ -1241,6 +1274,10 @@ const styles = StyleSheet.create({
     width: '50%',
     padding: 4
   },
+  playerCardGridItemFull: {
+    width: '100%',
+    padding: 4
+  },
 
   // Empty State untuk filter Tim yang belum ada pemain
   emptyTeamStateCard: {
@@ -1255,9 +1292,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 10
   },
-  emptyTeamStateIcon: {
-    fontSize: 24,
-    marginBottom: 8
+  emptyTeamIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10
   },
   emptyTeamStateTitle: {
     fontFamily: THEME.typography.fonts.bold,
@@ -1354,36 +1396,43 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary
   },
 
-  // Action Buttons
-  balancerBtn: {
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1,
-    borderColor: THEME.colors.primary,
-    borderRadius: 10,
-    height: 44,
+  // Action Buttons (Editorial Sync)
+  actionBtnInner: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8
+    gap: 8
+  },
+  balancerBtn: {
+    backgroundColor: 'rgba(213, 255, 64, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 255, 64, 0.35)',
+    borderRadius: 14,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10
   },
   balancerBtnText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 12,
+    fontSize: 12.5,
     color: THEME.colors.primary,
     includeFontPadding: false
   },
   shareBtn: {
-    backgroundColor: THEME.colors.card,
+    backgroundColor: '#141720',
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderRadius: 10,
-    height: 44,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 14,
+    height: 46,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16
+    marginBottom: 14
   },
   shareBtnText: {
     fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
+    fontSize: 12.5,
     color: THEME.colors.textSecondary,
     includeFontPadding: false
   },
@@ -1445,17 +1494,15 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     includeFontPadding: false
   },
-  joinedDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    marginVertical: 12
+  leaveActionBox: {
+    marginTop: 10
   },
   leaveSlotBtn: {
-    height: 38,
-    borderRadius: 10,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.25)',
-    backgroundColor: 'rgba(255, 59, 48, 0.08)',
+    borderColor: 'rgba(255, 59, 48, 0.24)',
+    backgroundColor: 'rgba(255, 59, 48, 0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1463,16 +1510,16 @@ const styles = StyleSheet.create({
   },
   leaveSlotBtnText: {
     fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#FF6B6B',
     includeFontPadding: false
   },
   cancelSessionBtn: {
-    height: 38,
-    borderRadius: 10,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.35)',
-    backgroundColor: 'rgba(255, 59, 48, 0.12)',
+    borderColor: 'rgba(255, 59, 48, 0.30)',
+    backgroundColor: 'rgba(255, 59, 48, 0.09)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1480,7 +1527,7 @@ const styles = StyleSheet.create({
   },
   cancelSessionBtnText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#FF6B6B',
     includeFontPadding: false
   },
