@@ -18,7 +18,7 @@ export interface PlayerCardProps {
   role: string;
   ovr: number;
   creditScore: number;
-  team: 'A' | 'B';
+  team: 'A' | 'B' | null;
   isHost?: boolean;
   isCurrentUser?: boolean;
   onPress?: () => void;
@@ -38,8 +38,14 @@ export default function PlayerCard({
   style
 }: PlayerCardProps) {
   const isTeamA = team === 'A';
-  const teamColor = isTeamA ? '#38BDF8' : '#F43F5E';
-  const avatarRing = isTeamA ? 'rgba(56, 189, 248, 0.5)' : 'rgba(244, 63, 94, 0.5)';
+  const isTeamB = team === 'B';
+  const teamColor = isTeamA ? '#38BDF8' : isTeamB ? '#F43F5E' : '#8A94A6';
+  const avatarRing = isTeamA
+    ? 'rgba(56, 189, 248, 0.5)'
+    : isTeamB
+    ? 'rgba(244, 63, 94, 0.5)'
+    : 'rgba(138, 148, 166, 0.35)';
+  const teamLabel = team ? `Tim ${team}` : 'Belum dibagi';
 
   const initials = name
     .trim()
@@ -105,7 +111,7 @@ export default function PlayerCard({
         <View style={styles.teamLabelRow}>
           <View style={[styles.teamDot, { backgroundColor: teamColor }]} />
           <Text style={[styles.teamLabelText, { color: teamColor }]}>
-            Tim {team}
+            {teamLabel}
           </Text>
         </View>
 
