@@ -1,14 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import Svg, { Polygon, Line, Circle, Text as SvgText, G } from 'react-native-svg';
 import { THEME } from '../theme';
-
-// Font dengan counter lebar (open aperture) khusus grade A, B, C, D, S agar tidak blur/bloated di layar kecil
-const GRADE_FONT = Platform.select({
-  ios: 'Helvetica Neue',
-  android: 'sans-serif-medium',
-  default: 'sans-serif',
-});
 
 export interface RadarDataPoint {
   key: string;
@@ -27,42 +20,43 @@ interface RadarChartProps {
 }
 
 export const getPointGrade = (val: number): { grade: 'S' | 'A' | 'B' | 'C' | 'D'; color: string } => {
-  if (val >= 90) return { grade: 'S', color: '#F59E0B' }; // Gold / Amber
-  if (val >= 80) return { grade: 'A', color: '#C084FC' }; // Purple / Violet
-  if (val >= 70) return { grade: 'B', color: '#38BDF8' }; // Cyan / Sky Blue
-  if (val >= 60) return { grade: 'C', color: '#34D399' }; // Mint / Emerald
-  return { grade: 'D', color: '#94A3B8' };                // Muted Slate
+  if (val >= 90) return { grade: 'S', color: '#F59E0B' };
+  if (val >= 80) return { grade: 'A', color: '#C084FC' };
+  if (val >= 70) return { grade: 'B', color: '#38BDF8' };
+  if (val >= 60) return { grade: 'C', color: '#34D399' };
+  return { grade: 'D', color: '#94A3B8' };
 };
+
+const VB_WIDTH = 310;
+const VB_HEIGHT = 236;
+const CENTER_X = 155;
+const CENTER_Y = 118;
+const RADIUS = 76;
 
 export default function RadarChart({
   data,
-  size = 280,
+  size = 310,
   maxValue = 100,
-  levels = 4,
+  levels = 3,
   accentColor = THEME.colors.primary,
   onPressPoint,
 }: RadarChartProps) {
-  const center = size / 2;
-  const radius = 68; // Jari-jari pentagon luar, proporsional memberi ruang nafas luar
   const totalPoints = data.length;
-
   if (totalPoints < 3) {
     return null;
   }
 
   const angleSlice = (Math.PI * 2) / totalPoints;
 
-  // Konversi polar (angle, r) ke kartesian (x, y)
-  // Index 0 dimulai dari -Math.PI / 2 (-90 deg) agar tegak lurus di puncak
-  const getCoordinates = (val: number, index: number, customR = radius) => {
+  const getCoordinates = (val: number, index: number, customR = RADIUS) => {
     const angle = index * angleSlice - Math.PI / 2;
     const scaledR = (val / maxValue) * customR;
-    const x = center + scaledR * Math.cos(angle);
-    const y = center + scaledR * Math.sin(angle);
-    return { x, y };
+    return {
+      x: CENTER_X + scaledR * Math.cos(angle),
+      y: CENTER_Y + scaledR * Math.sin(angle),
+    };
   };
 
-  // 1. Grid Cincin Konsentris Pentagon (Web Structure)
   const gridRings = Array.from({ length: levels }).map((_, levelIndex) => {
     const factor = (levelIndex + 1) / levels;
     const pointsStr = data
@@ -71,38 +65,34 @@ export default function RadarChart({
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(' ');
-
     const isOuter = levelIndex === levels - 1;
 
     return (
       <Polygon
         key={`grid-ring-${levelIndex}`}
         points={pointsStr}
-        stroke={isOuter ? 'rgba(192, 194, 184, 0.40)' : 'rgba(192, 194, 184, 0.16)'}
-        strokeWidth={isOuter ? '1.5' : '1'}
-        fill={isOuter ? 'rgba(255, 255, 255, 0.015)' : 'none'}
+        stroke={isOuter ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.07)'}
+        strokeWidth="1"
+        fill="none"
       />
     );
   });
 
-  // 2. Garis Sumbu (Spokes) dari titik tengah ke tiap sudut pentagon
   const axisSpokes = data.map((_, i) => {
     const { x, y } = getCoordinates(maxValue, i);
     return (
       <Line
         key={`axis-spoke-${i}`}
-        x1={center}
-        y1={center}
+        x1={CENTER_X}
+        y1={CENTER_Y}
         x2={x}
         y2={y}
-        stroke="rgba(192, 194, 184, 0.25)"
+        stroke="rgba(255, 255, 255, 0.08)"
         strokeWidth="1"
-        strokeDasharray="2,3"
       />
     );
   });
 
-  // 3. Poligon Data Pemain (Area Fill + Border Neon)
   const dataPolygonPoints = data
     .map((item, i) => {
       const { x, y } = getCoordinates(item.value, i);
@@ -110,110 +100,90 @@ export default function RadarChart({
     })
     .join(' ');
 
-  // 4. Circular Grade Badges & Axis Titles (Aesthetic mirip game TFT / Esports)
-  // Jarak / gap dari tiap ujung lancip pentagon ke lingkaran badge dihitung seragam secara matematis
-  const BADGE_RADIUS = 11.5;
-  const BADGE_GAP = 14.0; // Gap seragam persis 14px dari lancip pentagon ke tepi lingkaran badge di semua sumbu
-  const DIST_TO_BADGE_CENTER = radius + BADGE_GAP + BADGE_RADIUS;
+  // Label placement per vertex around the pentagon (full names + inline numeric score)
+  const getLabelLayout = (index: number) => {
+    const angle = index * angleSlice - Math.PI / 2;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    const edgePt = getCoordinates(maxValue, index);
 
-  const axisElements = data.map((item, i) => {
-    const angle = i * angleSlice - Math.PI / 2;
-    const cosAngle = Math.cos(angle);
-    const sinAngle = Math.sin(angle);
+    if (Math.abs(cosA) < 0.2 && sinA < 0) {
+      // Top vertex
+      return { x: edgePt.x, yName: edgePt.y - 26, anchor: 'middle' as const };
+    }
+    if (cosA > 0.4 && sinA < 0.2) {
+      // Upper-right vertex
+      return { x: edgePt.x + 10, yName: edgePt.y - 4, anchor: 'start' as const };
+    }
+    if (cosA < -0.4 && sinA < 0.2) {
+      // Upper-left vertex
+      return { x: edgePt.x - 10, yName: edgePt.y - 4, anchor: 'end' as const };
+    }
+    // Bottom vertices
+    return {
+      x: edgePt.x + (cosA > 0 ? 8 : -8),
+      yName: edgePt.y + 18,
+      anchor: 'middle' as const,
+    };
+  };
 
-    // Titik pusat badge dihitung seragam sepanjang vektor sudut radial masing-masing
-    const bx = center + DIST_TO_BADGE_CENTER * cosAngle;
-    const by = center + DIST_TO_BADGE_CENTER * sinAngle;
-
-    const pointGrade = getPointGrade(item.value);
-
-    // Title sumbu: di atas badge untuk paruh atas (i = 0, 1, 4), di bawah badge untuk paruh bawah (i = 2, 3)
-    const tx = bx;
-    const ty = (i === 0 || i === 1 || i === 4)
-      ? by - BADGE_RADIUS - 6
-      : by + BADGE_RADIUS + 15;
-
-    return (
-      <G
-        key={`axis-elem-${item.key}`}
-        onPress={() => onPressPoint && onPressPoint(item)}
-      >
-        {/* Title Sumbu (Vertikal terpisah, tidak akan menabrak badge) */}
-        <SvgText
-          x={tx}
-          y={ty}
-          fill={THEME.colors.textSecondary}
-          fontSize="10"
-          fontWeight="bold"
-          fontFamily={THEME.typography.fonts.bold}
-          textAnchor="middle"
-        >
-          {item.name}
-        </SvgText>
-
-        {/* Circular Badge Grade (S/A/B/C/D) dengan diameter lebih lega & font bersih */}
-        <Circle
-          cx={bx}
-          cy={by}
-          r={BADGE_RADIUS}
-          stroke={pointGrade.color}
-          strokeWidth="1.5"
-          fill="rgba(15, 20, 25, 0.94)"
-        />
-        <SvgText
-          x={bx}
-          y={by + 4}
-          fill={pointGrade.color}
-          fontSize="11"
-          fontWeight="bold"
-          fontFamily={GRADE_FONT}
-          textAnchor="middle"
-        >
-          {pointGrade.grade}
-        </SvgText>
-      </G>
-    );
-  });
-
-  const chartHeight = 255;
+  const chartHeight = Math.round((size * VB_HEIGHT) / VB_WIDTH);
 
   return (
     <View style={styles.chartWrapper}>
-      <Svg height={chartHeight} width={size} viewBox={`0 10 ${size} ${chartHeight - 10}`}>
-        {/* Cincin Grid */}
+      <Svg width={size} height={chartHeight} viewBox={`0 0 ${VB_WIDTH} ${VB_HEIGHT}`}>
         {gridRings}
-
-        {/* Garis Jari-Jari */}
         {axisSpokes}
 
-        {/* Area Nilai Poligon */}
         <Polygon
           points={dataPolygonPoints}
-          fill="rgba(213, 255, 64, 0.16)"
+          fill="rgba(213, 255, 64, 0.12)"
           stroke={accentColor}
           strokeWidth="2"
         />
 
-        {/* Titik Vertex (Node Bulat Bercahaya) */}
         {data.map((item, i) => {
           const { x, y } = getCoordinates(item.value, i);
-          const pointGrade = getPointGrade(item.value);
           return (
             <Circle
               key={`vertex-${item.key}`}
               cx={x}
               cy={y}
-              r="3.5"
-              fill={THEME.colors.background}
-              stroke={pointGrade.color}
-              strokeWidth="2"
+              r="3"
+              fill={accentColor}
               onPress={() => onPressPoint && onPressPoint(item)}
             />
           );
         })}
 
-        {/* Badges & Titles */}
-        {axisElements}
+        {data.map((item, i) => {
+          const layout = getLabelLayout(i);
+          const isTopScore = item.value >= 90;
+          return (
+            <G key={`label-${item.key}`} onPress={() => onPressPoint && onPressPoint(item)}>
+              <SvgText
+                x={layout.x}
+                y={layout.yName}
+                fill={THEME.colors.textSecondary}
+                fontSize="10"
+                fontFamily={THEME.typography.fonts.semiBold}
+                textAnchor={layout.anchor}
+              >
+                {item.name}
+              </SvgText>
+              <SvgText
+                x={layout.x}
+                y={layout.yName + 15}
+                fill={isTopScore ? accentColor : THEME.colors.text}
+                fontSize="12"
+                fontFamily={THEME.typography.fonts.extraBold}
+                textAnchor={layout.anchor}
+              >
+                {item.value}
+              </SvgText>
+            </G>
+          );
+        })}
       </Svg>
     </View>
   );
@@ -223,6 +193,5 @@ const styles = StyleSheet.create({
   chartWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
   },
 });
