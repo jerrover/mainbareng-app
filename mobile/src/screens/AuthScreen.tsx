@@ -133,7 +133,7 @@ export default function AuthScreen({ route, navigation }: Props) {
           setCooldown(60);
           showAlert(
             'Verifikasi Email Terkirim',
-            'Silakan cek kotak masuk email mahasiswa Anda untuk konfirmasi aktivasi akun sebelum masuk.',
+            'Silakan cek kotak masuk email kamu untuk konfirmasi aktivasi akun sebelum masuk.',
             'info',
             () => setIsSignUp(false),
             'Mengerti'
@@ -237,7 +237,7 @@ export default function AuthScreen({ route, navigation }: Props) {
           </Text>
           <Text style={styles.subtitle}>
             {isSignUp
-              ? 'Buat profil akun untuk bergabung dengan komunitas olahraga & esports UMN.'
+              ? 'Buat akun untuk cari teman main olahraga dan esports di sekitarmu.'
               : 'Masuk untuk menemukan dan bergabung ke sesi mabar terdekat.'}
           </Text>
         </View>
@@ -263,12 +263,12 @@ export default function AuthScreen({ route, navigation }: Props) {
           )}
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>EMAIL MAHASISWA / UMUM</Text>
+            <Text style={styles.inputLabel}>EMAIL</Text>
             <View style={styles.inputBox}>
               <Text style={styles.inputPrefixIcon}>✉</Text>
               <TextInput
                 style={styles.inputField}
-                placeholder="budi.santoso@student.umn.ac.id"
+                placeholder="nama@email.com"
                 placeholderTextColor={THEME.colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -286,7 +286,7 @@ export default function AuthScreen({ route, navigation }: Props) {
               {!isSignUp && (
                 <TouchableOpacity
                   onPress={() =>
-                    showAlert('Reset Kata Sandi', 'Fitur pemulihan kata sandi via email UMN akan segera hadir di rilis berikutnya.', 'info')
+                    showAlert('Reset Kata Sandi', 'Fitur reset kata sandi via email segera hadir di pembaruan berikutnya.', 'info')
                   }
                 >
                   <Text style={styles.forgotPasswordText}>Lupa Kata Sandi?</Text>
