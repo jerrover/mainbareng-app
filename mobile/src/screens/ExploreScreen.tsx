@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  useWindowDimensions
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path, Circle, Line, Polyline, Rect } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { THEME } from '../theme';
 import { MainTabScreenProps } from '../navigation/types';
 import { api, ApiSession } from '../services/api';
@@ -22,7 +24,11 @@ interface UserProfileHeader {
   fullName: string;
   creditScore: number;
   initials: string;
-  tier: string;
+}
+
+interface ParticipantSummary {
+  count: number;
+  avatars: string[];
 }
 
 // Fallback mock data jika server offline / belum ada sesi aktif
@@ -30,7 +36,7 @@ const FALLBACK_SESSIONS: ApiSession[] = [
   {
     id: 'fallback-1',
     host_id: 'host-1',
-    title: 'Futsal Malam Santai 5v5 Serpong',
+    title: 'Futsal Malam Santai 5v5',
     activity_type: 'futsal',
     session_category: 'sports',
     session_mode: 'play_now',
@@ -45,17 +51,11 @@ const FALLBACK_SESSIONS: ApiSession[] = [
     required_skill_level: 'Intermediate',
     team_format: '2_teams',
     estimated_cost_total: 300000,
-    notes: 'Bawa jersey cadangan hitam/putih',
+    notes: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    profiles: {
-      full_name: 'Jeremy Marvel',
-      credit_score: 98
-    },
-    venues: {
-      name: 'Tifosi Sport Center · Vinyl',
-      address: 'Gading Serpong, Tangerang'
-    }
+    profiles: { full_name: 'Jeremy Marvel', credit_score: 98 },
+    venues: { name: 'Tifosi Sport Center · Vinyl', address: 'Gading Serpong, Tangerang' }
   },
   {
     id: 'fallback-2',
@@ -67,7 +67,7 @@ const FALLBACK_SESSIONS: ApiSession[] = [
     status: 'OPEN',
     venue_id: 'venue-2',
     custom_location: null,
-    start_time: new Date(Date.now() + 3600 * 1000 * 3.5).toISOString(),
+    start_time: new Date(Date.now() + 3600 * 1000 * 1.5).toISOString(),
     duration_minutes: 90,
     end_time: null,
     max_slots: 4,
@@ -78,14 +78,8 @@ const FALLBACK_SESSIONS: ApiSession[] = [
     notes: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    profiles: {
-      full_name: 'Ben_Mobile',
-      credit_score: 92
-    },
-    venues: {
-      name: 'Champion Court Gading Serpong',
-      address: 'Kelapa Dua, Tangerang'
-    }
+    profiles: { full_name: 'Ben Arief', credit_score: 92 },
+    venues: { name: 'Champion Court Gading Serpong', address: 'Kelapa Dua, Tangerang' }
   },
   {
     id: 'fallback-3',
@@ -97,7 +91,7 @@ const FALLBACK_SESSIONS: ApiSession[] = [
     status: 'OPEN',
     venue_id: null,
     custom_location: 'Discord Voice Room #01',
-    start_time: new Date(Date.now() + 3600 * 1000 * 4).toISOString(),
+    start_time: new Date(Date.now() + 3600 * 1000 * 3).toISOString(),
     duration_minutes: 120,
     end_time: null,
     max_slots: 5,
@@ -108,10 +102,7 @@ const FALLBACK_SESSIONS: ApiSession[] = [
     notes: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    profiles: {
-      full_name: 'Hyun_Striker',
-      credit_score: 88
-    },
+    profiles: { full_name: 'Hyun Striker', credit_score: 88 },
     venues: null
   },
   {
@@ -131,18 +122,12 @@ const FALLBACK_SESSIONS: ApiSession[] = [
     min_credit_score: 75,
     required_skill_level: 'Beginner',
     team_format: '2_teams',
-    estimated_cost_total: 350000,
+    estimated_cost_total: 280000,
     notes: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    profiles: {
-      full_name: 'Jerikho Ruben',
-      credit_score: 90
-    },
-    venues: {
-      name: 'Tifosi Sport Center · Rumput',
-      address: 'Gading Serpong, Tangerang'
-    }
+    profiles: { full_name: 'Jerikho Ruben', credit_score: 95 },
+    venues: { name: 'GOR Gondrong · Cipondoh', address: 'Kota Tangerang' }
   }
 ];
 
@@ -153,212 +138,358 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-function getCreditTier(score: number): string {
-  if (score >= 90) return 'Prima';
-  if (score >= 75) return 'Baik';
-  if (score >= 60) return 'Standar';
-  return 'Waspada';
-}
-
-function formatKickoff(isoDateStr: string): { time: string; dayLabel: string } {
+function formatTimeHHMM(isoDateStr: string): string {
   try {
     const d = new Date(isoDateStr);
-    if (isNaN(d.getTime())) return { time: '19:00', dayLabel: 'Hari Ini' };
-
+    if (isNaN(d.getTime())) return '19:00';
     const hours = d.getHours().toString().padStart(2, '0');
     const minutes = d.getMinutes().toString().padStart(2, '0');
-    const time = `${hours}:${minutes}`;
-
-    const now = new Date();
-    const isToday =
-      d.getDate() === now.getDate() &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear();
-
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const isTomorrow =
-      d.getDate() === tomorrow.getDate() &&
-      d.getMonth() === tomorrow.getMonth() &&
-      d.getFullYear() === tomorrow.getFullYear();
-
-    let dayLabel = `${d.getDate()} ${d.toLocaleString('id-ID', { month: 'short' })}`;
-    if (isToday) dayLabel = 'Hari Ini';
-    else if (isTomorrow) dayLabel = 'Besok';
-
-    return { time, dayLabel };
+    return `${hours}:${minutes}`;
   } catch {
-    return { time: '19:00', dayLabel: 'Hari Ini' };
+    return '19:00';
   }
 }
 
-function getActivityBadgeLabel(activityType: string = ''): string {
+function getSportLabel(activityType: string = ''): string {
   const act = activityType.toLowerCase();
-  if (act.includes('futsal')) return '⚽ FUTSAL 5v5';
-  if (act.includes('badminton')) return '🏸 BADMINTON GANDA';
-  if (act.includes('basket')) return '🏀 BASKET 3v3';
-  if (act.includes('mlbb')) return '🎮 MLBB RANKED';
-  return activityType.toUpperCase() || 'MABAR SESI';
+  if (act.includes('futsal')) return 'Futsal';
+  if (act.includes('badminton')) return 'Badminton';
+  if (act.includes('basket')) return 'Basket';
+  if (act.includes('mini_soccer')) return 'Mini Soccer';
+  if (act.includes('mlbb')) return 'MLBB';
+  if (act.includes('valorant')) return 'Valorant';
+  return activityType ? activityType.charAt(0).toUpperCase() + activityType.slice(1) : 'Mabar';
 }
+
+function getFormatLabel(activityType: string = '', maxSlots: number = 10): string {
+  const act = activityType.toLowerCase();
+  if (act.includes('badminton')) return maxSlots <= 2 ? '1V1' : '2V2';
+  if (act.includes('basket')) return maxSlots <= 6 ? '3V3' : '5V5';
+  if (act.includes('mlbb') || act.includes('valorant')) return '5V5';
+  if (maxSlots >= 12) return '7V7';
+  if (maxSlots === 10) return '5V5';
+  if (maxSlots === 8) return '4V4';
+  if (maxSlots === 6) return '3V3';
+  return `${Math.max(1, Math.floor(maxSlots / 2))}V${Math.max(1, Math.floor(maxSlots / 2))}`;
+}
+
+function getSportTheme(activityType: string = ''): { hex: string; textHex: string } {
+  const act = activityType.toLowerCase();
+  if (act.includes('badminton')) return { hex: THEME.colors.success, textHex: THEME.colors.success };
+  if (act.includes('basket')) return { hex: THEME.colors.warning, textHex: THEME.colors.warning };
+  if (act.includes('mlbb') || act.includes('valorant')) {
+    return { hex: '#7B79FF', textHex: '#9391FF' };
+  }
+  return { hex: THEME.colors.primary, textHex: THEME.colors.primary };
+}
+
+function formatShortPrice(totalCost: number | null | undefined, slots: number): { isFree: boolean; numStr: string } {
+  if (!totalCost || totalCost <= 0) return { isFree: true, numStr: 'Gratis' };
+  const perPerson = Math.round(totalCost / Math.max(slots, 1));
+  if (perPerson >= 1000) {
+    return { isFree: false, numStr: `${Math.round(perPerson / 1000)}` };
+  }
+  return { isFree: false, numStr: `${perPerson}` };
+}
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getDate() === b.getDate() &&
+    a.getMonth() === b.getMonth() &&
+    a.getFullYear() === b.getFullYear()
+  );
+}
+
+// --- MONOCHROME VECTOR ICONS ---
+function SearchIcon({ color, size = 17 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={11} cy={11} r={8} stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1={21} y1={21} x2={16.65} y2={16.65} stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function CloseIcon({ color, size = 15 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Line x1={18} y1={6} x2={6} y2={18} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1={6} y1={6} x2={18} y2={18} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function MapPinIcon({ color, size = 13 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={10} r={3} stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function ChevronDownIcon({ color, size = 12 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polyline points="6 9 12 15 18 9" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function ShieldIcon({ color, size = 12 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function ArrowRightIcon({ color, size = 16 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Line x1={5} y1={12} x2={19} y2={12} stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Polyline points="12 5 19 12 12 19" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// --- ARCHITECTURAL SPORT COURT WATERMARKS ---
+function SportWatermark({ sport, dark }: { sport: string; dark: boolean }) {
+  const strokeColor = dark ? 'rgba(10,11,14,0.11)' : 'rgba(255,255,255,0.06)';
+  const s = sport.toLowerCase();
+
+  if (s.includes('badminton')) {
+    return (
+      <Svg width={180} height={180} viewBox="0 0 200 200" fill="none" style={styles.sportWatermark}>
+        <Rect x={15} y={15} width={170} height={170} stroke={strokeColor} strokeWidth={1} />
+        <Line x1={30} y1={15} x2={30} y2={185} stroke={strokeColor} strokeWidth={1} />
+        <Line x1={170} y1={15} x2={170} y2={185} stroke={strokeColor} strokeWidth={1} />
+        <Line x1={15} y1={100} x2={185} y2={100} stroke={strokeColor} strokeWidth={1} strokeDasharray="4 4" />
+        <Line x1={15} y1={72} x2={185} y2={72} stroke={strokeColor} strokeWidth={1} />
+        <Line x1={15} y1={128} x2={185} y2={128} stroke={strokeColor} strokeWidth={1} />
+        <Line x1={100} y1={15} x2={100} y2={72} stroke={strokeColor} strokeWidth={1} />
+        <Line x1={100} y1={128} x2={100} y2={185} stroke={strokeColor} strokeWidth={1} />
+      </Svg>
+    );
+  }
+
+  if (s.includes('basket')) {
+    return (
+      <Svg width={180} height={180} viewBox="0 0 200 200" fill="none" style={styles.sportWatermark}>
+        <Rect x={15} y={15} width={170} height={170} stroke={strokeColor} strokeWidth={1} />
+        <Circle cx={100} cy={100} r={30} stroke={strokeColor} strokeWidth={1} />
+        <Path d="M 50 15 L 50 75 A 45 45 0 0 0 150 75 L 150 15" stroke={strokeColor} strokeWidth={1} />
+        <Rect x={70} y={15} width={60} height={60} stroke={strokeColor} strokeWidth={1} />
+        <Circle cx={100} cy={35} r={8} stroke={strokeColor} strokeWidth={1} />
+      </Svg>
+    );
+  }
+
+  return (
+    <Svg width={180} height={180} viewBox="0 0 200 200" fill="none" style={styles.sportWatermark}>
+      <Rect x={10} y={10} width={180} height={180} rx={8} stroke={strokeColor} strokeWidth={1} />
+      <Line x1={10} y1={100} x2={190} y2={100} stroke={strokeColor} strokeWidth={1} />
+      <Circle cx={100} cy={100} r={26} stroke={strokeColor} strokeWidth={1} />
+      <Circle cx={100} cy={100} r={2} fill={strokeColor} />
+      <Rect x={55} y={10} width={90} height={40} stroke={strokeColor} strokeWidth={1} />
+      <Rect x={75} y={10} width={50} height={18} stroke={strokeColor} strokeWidth={1} />
+      <Path d="M78 50 C78 62 122 62 122 50" stroke={strokeColor} strokeWidth={1} />
+      <Rect x={55} y={150} width={90} height={40} stroke={strokeColor} strokeWidth={1} />
+      <Rect x={75} y={172} width={50} height={18} stroke={strokeColor} strokeWidth={1} />
+      <Path d="M78 150 C78 138 122 138 122 150" stroke={strokeColor} strokeWidth={1} />
+    </Svg>
+  );
+}
+
+// --- OVERLAPPING AVATAR FACEPILE ---
+function AvatarFacepile({
+  names,
+  extra,
+  dark,
+  ringOverride
+}: {
+  names: string[];
+  extra: number;
+  dark: boolean;
+  ringOverride?: string;
+}) {
+  const ringColor = ringOverride || (dark ? THEME.colors.primary : THEME.colors.card);
+  const circleBg = dark ? THEME.colors.background : '#1E2433';
+  const circleText = dark ? THEME.colors.primary : THEME.colors.text;
+  const extraBg = dark ? THEME.colors.background : 'rgba(255,255,255,0.1)';
+  const extraText = dark ? THEME.colors.text : THEME.colors.textSecondary;
+
+  return (
+    <View style={styles.facepileRow}>
+      {names.map((n, idx) => (
+        <View
+          key={`${n}-${idx}`}
+          style={[
+            styles.facepileCircle,
+            {
+              backgroundColor: circleBg,
+              borderColor: ringColor,
+              marginLeft: idx === 0 ? 0 : -6
+            }
+          ]}
+        >
+          <Text style={[styles.facepileText, { color: circleText }]}>{n}</Text>
+        </View>
+      ))}
+      {extra > 0 && (
+        <View
+          style={[
+            styles.facepileExtra,
+            {
+              backgroundColor: extraBg,
+              borderColor: ringColor,
+              marginLeft: names.length > 0 ? -6 : 0
+            }
+          ]}
+        >
+          <Text style={[styles.facepileText, { color: extraText }]}>+{extra}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const CATEGORIES = ['Semua', 'Futsal', 'Badminton', 'Basket', 'MLBB'];
+
+const CATEGORY_EMPTY_ICONS: Record<string, string> = {
+  Semua: '🏆',
+  Futsal: '⚽',
+  Badminton: '🏸',
+  Basket: '🏀',
+  MLBB: '🎮'
+};
 
 export default function ExploreScreen({ navigation }: Props) {
   const { user } = useAuthStore();
-  const insets = useSafeAreaInsets();
-  const bottomPadding = 24;
+  const { width: screenWidth } = useWindowDimensions();
+  const bentoCardWidth = (screenWidth - 40 - 10) / 2;
 
-  // Dynamic user profile state
   const [profile, setProfile] = useState<UserProfileHeader>({
     fullName: 'Pemain Mabar',
     creditScore: 100,
-    initials: 'PM',
-    tier: 'Prima'
+    initials: 'PM'
   });
 
-  // Sessions state from Real API
   const [sessions, setSessions] = useState<ApiSession[]>([]);
-  const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
+  const [participantMap, setParticipantMap] = useState<Record<string, ParticipantSummary>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
 
-  // Filter states
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
-  const [scheduleTab, setScheduleTab] = useState<'now' | 'scheduled'>('now');
+  const [searchOpen, setSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const categories = [
-    { id: 'Semua', label: 'Semua' },
-    { id: 'Futsal', label: '⚽ Futsal' },
-    { id: 'Badminton', label: '🏸 Badminton' },
-    { id: 'Basket', label: '🏀 Basket' },
-    { id: 'MLBB', label: '🎮 MLBB' }
-  ];
-
-  // 1. Fetch User Profile
   const loadUserProfile = useCallback(async () => {
     if (!user) {
-      setProfile({
-        fullName: 'Pemain Mabar',
-        creditScore: 100,
-        initials: 'PM',
-        tier: 'Prima'
-      });
+      setProfile({ fullName: 'Pemain Mabar', creditScore: 100, initials: 'PM' });
       return;
     }
 
     try {
-      // Coba ambil dari endpoint API profile/me
       const apiProf = await api.getMyProfile();
       if (apiProf && apiProf.full_name) {
-        const name = apiProf.full_name;
-        const score = apiProf.credit_score ?? 100;
         setProfile({
-          fullName: name,
-          creditScore: score,
-          initials: getInitials(name),
-          tier: getCreditTier(score)
+          fullName: apiProf.full_name,
+          creditScore: apiProf.credit_score ?? 100,
+          initials: getInitials(apiProf.full_name)
         });
         return;
       }
 
-      // Fallback: Query langsung ke tabel profiles Supabase
       const { data, error } = await supabase
         .from('profiles')
         .select('full_name, credit_score')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (!error && data) {
-        const name =
-          data.full_name ||
-          user.user_metadata?.full_name ||
-          user.email?.split('@')[0] ||
-          'Pemain Mabar';
-        const score = data.credit_score ?? 100;
-        setProfile({
-          fullName: name,
-          creditScore: score,
-          initials: getInitials(name),
-          tier: getCreditTier(score)
-        });
-      } else {
-        const name =
-          user.user_metadata?.full_name ||
-          user.email?.split('@')[0] ||
-          'Pemain Mabar';
-        setProfile({
-          fullName: name,
-          creditScore: 100,
-          initials: getInitials(name),
-          tier: 'Prima'
-        });
-      }
+      const fallbackName =
+        data?.full_name ||
+        user.user_metadata?.full_name ||
+        user.email?.split('@')[0] ||
+        'Pemain Mabar';
+
+      setProfile({
+        fullName: fallbackName,
+        creditScore: (!error && data?.credit_score) ?? 100,
+        initials: getInitials(fallbackName)
+      });
     } catch (err) {
       console.warn('[ExploreScreen] Error loading profile:', err);
     }
   }, [user]);
 
-  // 2. Fetch Sessions from Real API
   const fetchSessionsData = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
+    if (isRefresh) setIsRefreshing(true);
+    else setIsLoading(true);
 
     try {
       const data = await api.getSessions();
       if (data && Array.isArray(data) && data.length > 0) {
         setSessions(data);
-        setIsLiveConnected(true);
 
-        // Ambil jumlah peserta real-time per session dari session_participants
         const sessionIds = data.map((s) => s.id);
         const { data: parts, error: partErr } = await supabase
           .from('session_participants')
-          .select('session_id')
+          .select('session_id, profiles:user_id(full_name)')
           .in('session_id', sessionIds)
-          .neq('attendance_status', 'CANCELLED');
+          .neq('attendance_status', 'CANCELLED')
+          .order('slot_number', { ascending: true });
 
         if (!partErr && parts) {
-          const counts: Record<string, number> = {};
-          parts.forEach((p) => {
-            counts[p.session_id] = (counts[p.session_id] || 0) + 1;
+          const map: Record<string, ParticipantSummary> = {};
+          parts.forEach((p: any) => {
+            if (!map[p.session_id]) {
+              map[p.session_id] = { count: 0, avatars: [] };
+            }
+            map[p.session_id].count += 1;
+            const pProfile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
+            const initials = getInitials(pProfile?.full_name || 'PM');
+            if (map[p.session_id].avatars.length < 3) {
+              map[p.session_id].avatars.push(initials);
+            }
           });
-          setParticipantCounts(counts);
+          setParticipantMap(map);
         }
       } else {
-        // Jika server mengembalikan array kosong, gunakan data fallback
         setSessions(FALLBACK_SESSIONS);
-        setIsLiveConnected(false);
       }
     } catch (err) {
       console.warn('[ExploreScreen] Gagal memuat sesi live dari API, menggunakan fallback:', err);
       setSessions(FALLBACK_SESSIONS);
-      setIsLiveConnected(false);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   }, []);
 
-  // Inisialisasi awal
   useEffect(() => {
     loadUserProfile();
     fetchSessionsData();
   }, [loadUserProfile, fetchSessionsData]);
 
-  // Real-time listener: dengarkan perubahan sesi & peserta di Supabase
   useEffect(() => {
     const channel = supabase
       .channel('explore-live-updates')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'sessions' },
-        () => {
-          fetchSessionsData(false);
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
+        fetchSessionsData(false);
+      })
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'session_participants' },
@@ -373,56 +504,92 @@ export default function ExploreScreen({ navigation }: Props) {
     };
   }, [fetchSessionsData]);
 
-  // Dynamic counts for tabs
-  const { playNowCount, scheduledCount } = useMemo(() => {
-    let now = 0;
-    let sched = 0;
-    sessions.forEach((s) => {
-      if (s.session_mode === 'play_now') {
-        now++;
-      } else {
-        sched++;
-      }
-    });
-    return { playNowCount: now, scheduledCount: sched };
+  const activeSessions = useMemo(() => {
+    return sessions.filter((s) => s.status !== 'CANCELLED' && s.status !== 'COMPLETED');
   }, [sessions]);
 
-  // Filtering data
   const filteredSessions = useMemo(() => {
-    return sessions.filter((s) => {
-      // 1. Kategori
+    const q = searchQuery.toLowerCase().trim();
+    return activeSessions.filter((s) => {
       const matchesCat =
         selectedCategory === 'Semua' ||
         (s.activity_type &&
           s.activity_type.toLowerCase().includes(selectedCategory.toLowerCase())) ||
         (selectedCategory === 'MLBB' && s.session_category === 'esports');
 
-      // 2. Search query
       const venueName = s.venues?.name || s.custom_location || '';
       const hostName = s.profiles?.full_name || '';
-      const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        !query ||
-        s.title.toLowerCase().includes(query) ||
-        s.activity_type.toLowerCase().includes(query) ||
-        venueName.toLowerCase().includes(query) ||
-        hostName.toLowerCase().includes(query);
+        !q ||
+        s.title.toLowerCase().includes(q) ||
+        s.activity_type.toLowerCase().includes(q) ||
+        venueName.toLowerCase().includes(q) ||
+        hostName.toLowerCase().includes(q);
 
-      // 3. Mode Sesi (Play Now vs Terjadwal)
-      const matchesSchedule =
-        scheduleTab === 'now'
-          ? s.session_mode === 'play_now' || playNowCount === 0 // Fallback fleksibel jika 0 Play Now
-          : s.session_mode === 'scheduled' || scheduledCount === 0;
-
-      return matchesCat && matchesSearch && matchesSchedule;
+      return matchesCat && matchesSearch;
     });
-  }, [sessions, selectedCategory, searchQuery, scheduleTab, playNowCount, scheduledCount]);
+  }, [activeSessions, selectedCategory, searchQuery]);
+
+  const getSlotStats = useCallback(
+    (s: ApiSession) => {
+      const total = s.max_slots || 10;
+      const summary = participantMap[s.id];
+      const filled = Math.min(total, summary?.count || 1);
+      const remaining = Math.max(0, total - filled);
+      const hostInitials = getInitials(s.profiles?.full_name || 'Host');
+      const rawAvatars = summary?.avatars?.length ? summary.avatars : [hostInitials];
+      const extra = Math.max(0, filled - rawAvatars.length);
+      return { total, filled, remaining, avatars: rawAvatars, extra };
+    },
+    [participantMap]
+  );
+
+  // Hero "Hampir Penuh": sesi OPEN dengan sisa <= 2 pemain
+  const urgentSessions = useMemo(() => {
+    return filteredSessions.filter((s) => {
+      const { remaining } = getSlotStats(s);
+      return s.status === 'OPEN' && remaining > 0 && remaining <= 2;
+    });
+  }, [filteredSessions, getSlotStats]);
+
+  // Split "Hari Ini" vs "Besok / Mendatang"
+  const { todaySessions, upcomingSessions } = useMemo(() => {
+    const now = new Date();
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const today: ApiSession[] = [];
+    const upcoming: ApiSession[] = [];
+
+    filteredSessions.forEach((s) => {
+      const start = new Date(s.start_time);
+      if (isNaN(start.getTime()) || isSameCalendarDay(start, now)) {
+        today.push(s);
+      } else if (start > endOfToday) {
+        upcoming.push(s);
+      } else {
+        // Sesi OPEN dari tanggal sebelumnya tetap ditampilkan di Hari Ini agar tidak hilang saat testing
+        today.push(s);
+      }
+    });
+
+    today.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    upcoming.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+    return { todaySessions: today, upcomingSessions: upcoming };
+  }, [filteredSessions]);
+
+  const handleOpenLobby = (session: ApiSession) => {
+    navigation.navigate('Lobby', {
+      sessionId: session.id,
+      sessionTitle: session.title
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomPadding }]}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -433,350 +600,546 @@ export default function ExploreScreen({ navigation }: Props) {
           />
         }
       >
-        {/* Top App Bar (Dynamic User Profile) */}
-        <View style={styles.topAppBar}>
-          <View style={styles.userInfo}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{profile.initials}</Text>
-            </View>
-            <View>
-              <Text style={styles.greetingText}>Halo, {profile.fullName}</Text>
-              <Text style={styles.karmaText}>
-                🛡️ Credit: {profile.creditScore} ({profile.tier})
+        {/* 1. GROUNDED 1-ROW NATIVE MOBILE TOP BAR + COLLAPSIBLE SEARCH */}
+        <View style={styles.topBarWrapper}>
+          <View style={styles.topBarRow}>
+            {/* Left: mabar. + hairline + Tangerang */}
+            <View style={styles.topBarLeft}>
+              <Text style={styles.brandWordmark}>
+                mabar<Text style={styles.brandDot}>.</Text>
               </Text>
-            </View>
-          </View>
-          <View style={styles.creditBadge}>
-            <Text style={styles.creditBadgeText}>
-              ⚡ {profile.creditScore} {profile.tier}
-            </Text>
-          </View>
-        </View>
-
-        {/* Search & Filter Bar */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchBox}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Cari sesi, venue, atau game..."
-              placeholderTextColor={THEME.colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-          <TouchableOpacity
-            style={styles.filterBtn}
-            activeOpacity={0.8}
-            onPress={() => fetchSessionsData(true)}
-            accessibilityLabel="Refresh Data"
-          >
-            <Text style={styles.filterBtnIcon}>🔄</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Category Chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
-          {categories.map((cat) => {
-            const isActive = selectedCategory === cat.id;
-            return (
+              <View style={styles.topBarDivider} />
               <TouchableOpacity
-                key={cat.id}
-                style={[styles.categoryChip, isActive && styles.categoryChipActive]}
                 activeOpacity={0.7}
-                onPress={() => setSelectedCategory(cat.id)}
+                style={styles.locationTrigger}
+                onPress={() => fetchSessionsData(true)}
               >
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    isActive && styles.categoryChipTextActive
-                  ]}
-                >
-                  {cat.label}
-                </Text>
+                <MapPinIcon color={THEME.colors.primary} size={13} />
+                <Text style={styles.locationText}>Tangerang</Text>
+                <ChevronDownIcon color={THEME.colors.textMuted} size={12} />
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Schedule Tab Switch */}
-        <View style={styles.scheduleSwitch}>
-          <TouchableOpacity
-            style={[
-              styles.scheduleTab,
-              scheduleTab === 'now' && styles.scheduleTabActive
-            ]}
-            onPress={() => setScheduleTab('now')}
-          >
-            <Text
-              style={[
-                styles.scheduleTabText,
-                scheduleTab === 'now' && styles.scheduleTabTextActive
-              ]}
-            >
-              Play Now ({playNowCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.scheduleTab,
-              scheduleTab === 'scheduled' && styles.scheduleTabActive
-            ]}
-            onPress={() => setScheduleTab('scheduled')}
-          >
-            <Text
-              style={[
-                styles.scheduleTabText,
-                scheduleTab === 'scheduled' && styles.scheduleTabTextActive
-              ]}
-            >
-              Terjadwal ({scheduledCount})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Play Now Alert Banner */}
-        {scheduleTab === 'now' && playNowCount > 0 && (
-          <View style={styles.alertBanner}>
-            <View style={styles.alertBannerLeft}>
-              <View style={styles.playNowBadge}>
-                <Text style={styles.playNowBadgeText}>PLAY NOW</Text>
-              </View>
-              <Text style={styles.alertTitle}>{playNowCount} sesi darurat butuh pemain!</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => {
-                const firstNow = sessions.find((s) => s.session_mode === 'play_now');
-                if (firstNow) {
-                  navigation.navigate('Lobby', {
-                    sessionId: firstNow.id,
-                    sessionTitle: firstNow.title
-                  });
-                }
-              }}
-            >
-              <Text style={styles.alertActionText}>Lihat →</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
-        {/* Section Header */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionHeaderTitle}>SESI TERDEKAT DISEKITARMU</Text>
-          <Text style={styles.sectionHeaderMeta}>
-            {filteredSessions.length} Sesi Tersedia
-          </Text>
+            {/* Right: Search Toggle + Shield Score + Avatar */}
+            <View style={styles.topBarRight}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setSearchOpen((prev) => !prev)}
+                style={[styles.searchToggleBtn, searchOpen && styles.searchToggleBtnActive]}
+                accessibilityLabel="Cari Sesi"
+              >
+                {searchOpen ? (
+                  <CloseIcon color={THEME.colors.textOnPrimary} size={16} />
+                ) : (
+                  <SearchIcon color={THEME.colors.textMuted} size={17} />
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.scoreCluster}>
+                <ShieldIcon color={THEME.colors.textMuted} size={12} />
+                <Text style={styles.scoreText}>{profile.creditScore}</Text>
+              </View>
+
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarText}>{profile.initials}</Text>
+              </View>
+            </View>
+          </View>
+
+          {searchOpen && (
+            <View style={styles.collapsibleSearchBox}>
+              <SearchIcon color={THEME.colors.primary} size={15} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Cari futsal, lapangan, atau lokasi..."
+                placeholderTextColor={THEME.colors.textMuted}
+                autoFocus
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <CloseIcon color={THEME.colors.textMuted} size={14} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
-        {/* Loading Indicator */}
-        {isLoading && !isRefreshing && (
+        {/* 2. SCULPTURAL CATEGORY CHIPS (Locked Height 44px, Text Only) */}
+        <View style={styles.categoryBarWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.horizontalScrollFix}
+            contentContainerStyle={styles.categoryScroll}
+          >
+            {CATEGORIES.map((cat) => {
+              const active = selectedCategory === cat;
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  activeOpacity={0.8}
+                  onPress={() => setSelectedCategory(cat)}
+                  style={[styles.categoryChip, active && styles.categoryChipActive]}
+                >
+                  <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* LOADING */}
+        {isLoading && !isRefreshing ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={THEME.colors.primary} />
             <Text style={styles.loadingText}>Memuat sesi mabar...</Text>
           </View>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && filteredSessions.length === 0 && (
+        ) : filteredSessions.length === 0 ? (
+          /* EMPTY STATE */
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🎾</Text>
+            <Text style={styles.emptyIcon}>{CATEGORY_EMPTY_ICONS[selectedCategory] || '🏆'}</Text>
             <Text style={styles.emptyTitle}>Belum Ada Sesi Tersedia</Text>
             <Text style={styles.emptySubtitle}>
               Tidak ditemukan sesi untuk kategori "{selectedCategory}". Coba ubah filter atau buat sesi mabar baru!
             </Text>
             <TouchableOpacity
+              activeOpacity={0.8}
               style={styles.emptyBtn}
               onPress={() => navigation.navigate('Create')}
             >
               <Text style={styles.emptyBtnText}>+ Buat Sesi Baru</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : (
+          <>
+            {/* 3. SECTION 1: "HAMPIR PENUH" — HORIZONTAL HERO POSTERS */}
+            {urgentSessions.length > 0 && (
+              <View style={styles.sectionBlock}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionTitleWithDot}>
+                    <View style={styles.voltDot} />
+                    <Text style={styles.sectionHeading}>Hampir Penuh</Text>
+                  </View>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setSelectedCategory('Semua');
+                      setSearchQuery('');
+                    }}
+                  >
+                    <Text style={styles.sectionActionLink}>Lihat semua</Text>
+                  </TouchableOpacity>
+                </View>
 
-        {/* Match Pass Bento Ticket Cards */}
-        {!isLoading && (
-          <View style={styles.ticketList}>
-            {filteredSessions.map((session) => {
-              const totalSlots = session.max_slots || 10;
-              const filledSlots = Math.min(
-                totalSlots,
-                participantCounts[session.id] || (session.status === 'COMPLETED' ? totalSlots : 1)
-              );
-              const emptySlots = Math.max(0, totalSlots - filledSlots);
-              const pips = Array.from({ length: totalSlots }, (_, i) => i < filledSlots);
-              const isFutsal = totalSlots === 10;
+                <View style={styles.heroCarouselWrapper}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.horizontalScrollFix}
+                    contentContainerStyle={styles.heroCarouselContent}
+                  >
+                  {urgentSessions.map((s, idx) => {
+                    const isFirst = idx === 0;
+                    const sport = getSportLabel(s.activity_type);
+                    const format = getFormatLabel(s.activity_type, s.max_slots);
+                    const timeStr = formatTimeHHMM(s.start_time);
+                    const venue = s.venues?.name || s.custom_location || 'Venue Mabar';
+                    const stats = getSlotStats(s);
+                    const price = formatShortPrice(s.estimated_cost_total, stats.total);
 
-              const isCancelled = session.status === 'CANCELLED';
-              const isLocked = session.status === 'LOCKED';
-              const isCompleted = session.status === 'COMPLETED';
-
-              const kickoff = formatKickoff(session.start_time);
-              const venueName =
-                session.venues?.name || session.custom_location || 'Venue Rekanan Mabar';
-              const hostName = session.profiles?.full_name || 'Host Mabar';
-              const hostScore = session.profiles?.credit_score ?? 100;
-
-              const costDisplay =
-                session.estimated_cost_total && session.estimated_cost_total > 0
-                  ? `Rp ${Math.round(session.estimated_cost_total / totalSlots).toLocaleString('id-ID')}`
-                  : 'Gratis';
-
-              return (
-                <TouchableOpacity
-                  key={session.id}
-                  style={[
-                    styles.matchPassCard,
-                    isCancelled && styles.matchPassCardCancelled,
-                    isLocked && styles.matchPassCardLocked
-                  ]}
-                  activeOpacity={0.88}
-                  onPress={() =>
-                    navigation.navigate('Lobby', {
-                      sessionId: session.id,
-                      sessionTitle: session.title
-                    })
-                  }
-                >
-                  {/* Stub Header */}
-                  <View style={styles.stubHeader}>
-                    <View style={styles.stubHeaderLeft}>
-                      <View style={styles.activityPill}>
-                        <Text style={styles.activityPillText}>
-                          {getActivityBadgeLabel(session.activity_type)}
-                        </Text>
-                      </View>
-                      <View
+                    return (
+                      <TouchableOpacity
+                        key={s.id}
+                        activeOpacity={0.9}
+                        onPress={() => handleOpenLobby(s)}
                         style={[
-                          styles.modePill,
-                          isLocked && styles.modePillLocked,
-                          isCompleted && styles.modePillCompleted,
-                          isCancelled && styles.modePillCancelled
+                          styles.heroCard,
+                          isFirst ? styles.heroCardVolt : styles.heroCardDark
                         ]}
                       >
+                        <SportWatermark sport={sport} dark={isFirst} />
+
                         <Text
                           style={[
-                            styles.modePillText,
-                            isLocked && styles.modePillLockedText,
-                            isCompleted && styles.modePillCompletedText,
-                            isCancelled && styles.modePillCancelledText
+                            styles.heroGhostFormat,
+                            { color: isFirst ? 'rgba(10,11,14,0.06)' : 'rgba(255,255,255,0.03)' }
                           ]}
                         >
-                          {isCancelled ? 'BATAL' : session.status || 'OPEN'}
+                          {format}
                         </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.hostText}>
-                      Host: {hostName} · 🛡️ {hostScore}
-                    </Text>
-                  </View>
 
-                  {/* Main Ticket Info Row */}
-                  <View style={styles.mainInfoRow}>
-                    {/* Left: Kickoff Box */}
-                    <View style={styles.kickoffBox}>
-                      <Text style={styles.kickoffEyebrow}>KICKOFF</Text>
-                      <Text style={styles.kickoffTime}>{kickoff.time}</Text>
-                      <Text style={styles.kickoffDay}>{kickoff.dayLabel}</Text>
-                    </View>
+                        {/* Top Rail */}
+                        <View style={styles.heroTopRail}>
+                          <Text
+                            style={[
+                              styles.heroSportMeta,
+                              { color: isFirst ? THEME.colors.textOnPrimary : THEME.colors.text }
+                            ]}
+                          >
+                            {sport.toUpperCase()} {format}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.heroUrgencyText,
+                              {
+                                color: isFirst
+                                  ? 'rgba(10,11,14,0.8)'
+                                  : THEME.colors.warning
+                              }
+                            ]}
+                          >
+                            Kurang {stats.remaining} pemain
+                          </Text>
+                        </View>
 
-                    {/* Vertical Divider */}
-                    <View style={styles.verticalDivider} />
+                        {/* Solid 36px Kickoff Time + Title + Venue */}
+                        <View style={styles.heroMiddle}>
+                          <Text
+                            style={[
+                              styles.heroKickoff,
+                              { color: isFirst ? THEME.colors.textOnPrimary : THEME.colors.text }
+                            ]}
+                          >
+                            {timeStr}
+                          </Text>
+                          <Text
+                            numberOfLines={2}
+                            style={[
+                              styles.heroTitle,
+                              { color: isFirst ? THEME.colors.textOnPrimary : THEME.colors.text }
+                            ]}
+                          >
+                            {s.title}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.heroVenue,
+                              {
+                                color: isFirst
+                                  ? 'rgba(10,11,14,0.75)'
+                                  : THEME.colors.textMuted
+                              }
+                            ]}
+                          >
+                            {venue}
+                          </Text>
+                        </View>
 
-                    {/* Right: Title & Meta */}
-                    <View style={styles.detailsBox}>
-                      <Text style={styles.matchTitle} numberOfLines={2}>
-                        {session.title}
-                      </Text>
-                      <Text style={styles.matchVenue} numberOfLines={1}>
-                        📍 {venueName}
-                      </Text>
-                      <View style={styles.matchCreditBadgeBox}>
-                        <Text style={styles.matchCreditBadgeText}>
-                          🛡️ Min Credit: {session.min_credit_score ?? 70}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Quota Progress Pips */}
-                  <View style={styles.quotaSection}>
-                    <View style={styles.quotaHeader}>
-                      <Text style={styles.quotaTitle}>
-                        KUOTA: {filledSlots}/{totalSlots} TERISI
-                      </Text>
-                      <Text
-                        style={[
-                          styles.quotaRemaining,
-                          isCancelled
-                            ? { color: '#FF6B6B' }
-                            : emptySlots === 0
-                            ? { color: THEME.colors.warning }
-                            : { color: THEME.colors.success }
-                        ]}
-                      >
-                        {isCancelled
-                          ? 'Sesi Dibatalkan'
-                          : emptySlots === 0
-                          ? 'Slot Penuh!'
-                          : `Sisa ${emptySlots} Slot!`}
-                      </Text>
-                    </View>
-                    <View style={styles.pipsRow}>
-                      {pips.map((filled, idx) => (
+                        {/* Swiss 3-Col Grid */}
                         <View
-                          key={idx}
                           style={[
-                            styles.pip,
-                            isFutsal ? styles.pipFutsal : styles.pipBadminton,
-                            filled && (isCancelled ? styles.pipCancelled : styles.pipActive)
+                            styles.heroGrid,
+                            {
+                              borderTopColor: isFirst
+                                ? 'rgba(10,11,14,0.15)'
+                                : 'rgba(255,255,255,0.08)'
+                            }
                           ]}
-                        />
-                      ))}
-                    </View>
-                  </View>
+                        >
+                          <View style={styles.heroGridCol}>
+                            <Text
+                              style={[
+                                styles.heroGridLabel,
+                                {
+                                  color: isFirst
+                                    ? 'rgba(10,11,14,0.6)'
+                                    : THEME.colors.textMuted
+                                }
+                              ]}
+                            >
+                              MIN. SKOR
+                            </Text>
+                            <Text
+                              style={[
+                                styles.heroGridValue,
+                                { color: isFirst ? THEME.colors.textOnPrimary : THEME.colors.text }
+                              ]}
+                            >
+                              {s.min_credit_score ?? 70}+
+                            </Text>
+                          </View>
 
-                  {/* Perforation Divider with Notches */}
-                  <View style={styles.perforationWrapper}>
-                    <View style={styles.notchLeft} />
-                    <View style={styles.dashedLine} />
-                    <View style={styles.notchRight} />
-                  </View>
+                          <View
+                            style={[
+                              styles.heroGridColMid,
+                              {
+                                borderColor: isFirst
+                                  ? 'rgba(10,11,14,0.15)'
+                                  : 'rgba(255,255,255,0.08)'
+                              }
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.heroGridLabel,
+                                {
+                                  color: isFirst
+                                    ? 'rgba(10,11,14,0.6)'
+                                    : THEME.colors.textMuted
+                                }
+                              ]}
+                            >
+                              PEMAIN
+                            </Text>
+                            <Text
+                              style={[
+                                styles.heroGridValue,
+                                { color: isFirst ? THEME.colors.textOnPrimary : THEME.colors.text }
+                              ]}
+                            >
+                              {String(stats.filled).padStart(2, '0')}
+                              <Text
+                                style={[
+                                  styles.heroGridSubValue,
+                                  {
+                                    color: isFirst
+                                      ? 'rgba(10,11,14,0.7)'
+                                      : THEME.colors.textMuted
+                                  }
+                                ]}
+                              >
+                                /{stats.total}
+                              </Text>
+                            </Text>
+                          </View>
 
-                  {/* Foot: Cost & CTA */}
-                  <View style={styles.ticketFoot}>
-                    <View style={styles.costBox}>
-                      <Text style={styles.costLabel}>EST. PATUNGAN</Text>
-                      <View style={styles.costValueRow}>
-                        <Text style={styles.costAmount}>{costDisplay}</Text>
-                        {costDisplay !== 'Gratis' && (
-                          <Text style={styles.costPerOrg}> / org</Text>
-                        )}
-                      </View>
-                    </View>
-                    <View
-                      style={[
-                        styles.btnDetail,
-                        isCancelled && styles.btnDetailCancelled
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.btnDetailText,
-                          isCancelled && styles.btnDetailCancelledText
-                        ]}
+                          <View style={styles.heroGridColRight}>
+                            <Text
+                              style={[
+                                styles.heroGridLabel,
+                                {
+                                  color: isFirst
+                                    ? 'rgba(10,11,14,0.6)'
+                                    : THEME.colors.textMuted
+                                }
+                              ]}
+                            >
+                              PATUNGAN
+                            </Text>
+                            <Text
+                              style={[
+                                styles.heroGridValue,
+                                { color: isFirst ? THEME.colors.textOnPrimary : THEME.colors.text }
+                              ]}
+                            >
+                              {price.isFree ? 'Gratis' : `Rp ${price.numStr}k`}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Bottom Row: Facepile + Circular Arrow */}
+                        <View
+                          style={[
+                            styles.heroBottomRow,
+                            {
+                              borderTopColor: isFirst
+                                ? 'rgba(10,11,14,0.15)'
+                                : 'rgba(255,255,255,0.08)'
+                            }
+                          ]}
+                        >
+                          <AvatarFacepile
+                            names={stats.avatars}
+                            extra={stats.extra}
+                            dark={isFirst}
+                          />
+
+                          <View
+                            style={[
+                              styles.heroArrowBtn,
+                              {
+                                backgroundColor: isFirst
+                                  ? THEME.colors.background
+                                  : 'rgba(255,255,255,0.1)'
+                              }
+                            ]}
+                          >
+                            <ArrowRightIcon
+                              color={isFirst ? THEME.colors.primary : THEME.colors.text}
+                              size={16}
+                            />
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  </ScrollView>
+                </View>
+              </View>
+            )}
+
+            {/* 4. SECTION 2: "HARI INI" — FULL-WIDTH ATHLETIC MATCH CARDS (C BIASA) */}
+            {todaySessions.length > 0 && (
+              <View style={styles.paddedSection}>
+                <View style={styles.sectionHeaderNoPad}>
+                  <Text style={styles.sectionHeading}>Hari Ini</Text>
+                  <Text style={styles.sectionCountMeta}>{todaySessions.length} sesi</Text>
+                </View>
+
+                <View style={styles.todayCardsList}>
+                  {todaySessions.map((s) => {
+                    const sport = getSportLabel(s.activity_type);
+                    const format = getFormatLabel(s.activity_type, s.max_slots);
+                    const timeStr = formatTimeHHMM(s.start_time);
+                    const venue = s.venues?.name || s.custom_location || 'Venue Mabar';
+                    const stats = getSlotStats(s);
+                    const price = formatShortPrice(s.estimated_cost_total, stats.total);
+                    const isLastPlayer = stats.remaining === 1;
+                    const st = getSportTheme(s.activity_type);
+                    const pipCount = Math.min(stats.total, 14);
+                    const filledPips =
+                      stats.total <= 14
+                        ? stats.filled
+                        : Math.round((stats.filled / Math.max(stats.total, 1)) * pipCount);
+
+                    return (
+                      <TouchableOpacity
+                        key={s.id}
+                        activeOpacity={0.88}
+                        onPress={() => handleOpenLobby(s)}
+                        style={styles.todayCard}
                       >
-                        {isCancelled ? 'Lihat Info ➔' : 'Detail Sesi ➔'}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                        {/* Top Row: Solid 26px Time + WIB | Colored Sport · Format */}
+                        <View style={styles.todayTopRow}>
+                          <View style={styles.todayTimeWrap}>
+                            <Text style={styles.todayTimeText}>{timeStr}</Text>
+                            <Text style={styles.todayWibText}>WIB</Text>
+                          </View>
+                          <Text style={[styles.todaySportMeta, { color: st.textHex }]}>
+                            {sport.toUpperCase()} · {format}
+                          </Text>
+                        </View>
+
+                        {/* Middle: Full-width Title & Colored Pin Venue */}
+                        <Text style={styles.todayTitle}>{s.title}</Text>
+                        <View style={styles.todayVenueRow}>
+                          <MapPinIcon color={st.hex} size={12} />
+                          <Text numberOfLines={1} style={styles.todayVenueText}>
+                            {venue}
+                          </Text>
+                        </View>
+
+                        {/* Segmented Sport-Colored Quota Pips */}
+                        <View style={styles.todayPipsRow}>
+                          {Array.from({ length: pipCount }, (_, i) => (
+                            <View
+                              key={i}
+                              style={[
+                                styles.todayPip,
+                                {
+                                  backgroundColor:
+                                    i < filledPips ? st.hex : 'rgba(255,255,255,0.09)'
+                                }
+                              ]}
+                            />
+                          ))}
+                        </View>
+
+                        {/* Bottom Row: Facepile + Player Status | Price */}
+                        <View style={styles.todayBottomRow}>
+                          <View style={styles.todayBottomLeft}>
+                            <AvatarFacepile
+                              names={stats.avatars}
+                              extra={stats.extra}
+                              dark={false}
+                              ringOverride="#171A24"
+                            />
+                            <Text style={styles.todayPlayerStatus}>
+                              {isLastPlayer ? (
+                                <>
+                                  {stats.filled}/{stats.total} ·{' '}
+                                  <Text style={[styles.kurangSatuHighlight, { color: st.textHex }]}>
+                                    kurang 1
+                                  </Text>
+                                </>
+                              ) : (
+                                `${stats.filled}/${stats.total} pemain`
+                              )}
+                            </Text>
+                          </View>
+
+                          <View>
+                            {price.isFree ? (
+                              <Text style={[styles.todayPriceFree, { color: st.textHex }]}>
+                                Gratis
+                              </Text>
+                            ) : (
+                              <Text style={styles.todayPriceNum}>Rp {price.numStr}k</Text>
+                            )}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* 5. SECTION 3: "BESOK" — 2-COLUMN BENTO GRID (C BIASA) */}
+            {upcomingSessions.length > 0 && (
+              <View style={styles.paddedSection}>
+                <View style={styles.sectionHeaderNoPad}>
+                  <Text style={styles.sectionHeading}>Besok</Text>
+                  <Text style={styles.sectionCountMeta}>{upcomingSessions.length} sesi</Text>
+                </View>
+
+                <View style={styles.bentoGrid}>
+                  {upcomingSessions.map((s) => {
+                    const sport = getSportLabel(s.activity_type);
+                    const timeStr = formatTimeHHMM(s.start_time);
+                    const venue = s.venues?.name || s.custom_location || 'Venue Mabar';
+                    const stats = getSlotStats(s);
+                    const price = formatShortPrice(s.estimated_cost_total, stats.total);
+                    const st = getSportTheme(s.activity_type);
+
+                    return (
+                      <TouchableOpacity
+                        key={s.id}
+                        activeOpacity={0.88}
+                        onPress={() => handleOpenLobby(s)}
+                        style={[styles.bentoCard, { width: bentoCardWidth }]}
+                      >
+                        <View>
+                          <View style={styles.bentoTopRow}>
+                            <Text style={[styles.bentoSport, { color: st.textHex }]}>
+                              {sport.toUpperCase()}
+                            </Text>
+                            <Text style={styles.bentoTime}>{timeStr}</Text>
+                          </View>
+
+                          <Text numberOfLines={2} style={styles.bentoTitle}>
+                            {s.title}
+                          </Text>
+                          <Text numberOfLines={1} style={styles.bentoVenue}>
+                            {venue}
+                          </Text>
+                        </View>
+
+                        <View style={styles.bentoBottomRow}>
+                          <Text style={styles.bentoPlayers}>
+                            {stats.filled}/{stats.total} pemain
+                          </Text>
+                          <Text
+                            style={[
+                              styles.bentoPrice,
+                              price.isFree && { color: st.textHex }
+                            ]}
+                          >
+                            {price.isFree ? 'Gratis' : `Rp ${price.numStr}k`}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -793,267 +1156,167 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.background
   },
   contentContainer: {
-    paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
-    paddingTop: 8,
-    paddingBottom: 120
+    paddingBottom: 32
   },
 
-  // Top App Bar
-  topAppBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10
+  // 1. Grounded 1-Row Native Top Bar
+  topBarWrapper: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 8
   },
-  userInfo: {
+  topBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  topBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  brandWordmark: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 20,
+    color: THEME.colors.text,
+    letterSpacing: -0.8,
+    includeFontPadding: false
+  },
+  brandDot: {
+    color: THEME.colors.primary
+  },
+  topBarDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    marginHorizontal: 10
+  },
+  locationTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  locationText: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    includeFontPadding: false
+  },
+  topBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10
   },
+  searchToggleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  searchToggleBtnActive: {
+    backgroundColor: THEME.colors.primary
+  },
+  scoreCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  scoreText: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
   avatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1.5,
-    borderColor: THEME.colors.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#181C26',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center'
   },
   avatarText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 13,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  greetingText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 16,
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 11,
     color: THEME.colors.text,
     includeFontPadding: false
   },
-  karmaText: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false,
-    marginTop: 1
-  },
-  creditBadge: {
-    backgroundColor: THEME.colors.cardElevated,
+  collapsibleSearchBox: {
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: '#141720',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: THEME.radius.full
-  },
-  creditBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 11,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-
-  // Live Database Indicator
-  liveIndicatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-    paddingHorizontal: 2
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5
-  },
-  liveIndicatorText: {
-    fontFamily: THEME.typography.fonts.medium,
-    fontSize: 10,
-    color: THEME.colors.textSecondary
-  },
-
-  // Search & Filter Row
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14
-  },
-  searchBox: {
-    flex: 1,
-    height: 44,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12
-  },
-  searchIcon: {
-    fontSize: 14,
-    marginRight: 8
+    borderColor: 'rgba(213, 255, 64, 0.4)'
   },
   searchInput: {
     flex: 1,
     fontFamily: THEME.typography.fonts.regular,
     fontSize: 13,
     color: THEME.colors.text,
-    includeFontPadding: false,
-    paddingVertical: 0
+    paddingVertical: 0,
+    includeFontPadding: false
   },
-  filterBtn: {
-    width: 44,
+
+  // 2. Category Chips
+  categoryBarWrapper: {
     height: 44,
-    borderRadius: 10,
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    alignItems: 'center',
     justifyContent: 'center'
   },
-  filterBtnIcon: {
-    fontSize: 16
+  horizontalScrollFix: {
+    flexGrow: 0,
+    flexShrink: 0
   },
-
-  // Category Chips
   categoryScroll: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingBottom: 14
-  },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder
-  },
-  categoryChipActive: {
-    backgroundColor: THEME.colors.primary,
-    borderColor: THEME.colors.primary
-  },
-  categoryChipText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-  categoryChipTextActive: {
-    fontFamily: THEME.typography.fonts.bold,
-    color: THEME.colors.textOnPrimary,
-    includeFontPadding: false
-  },
-
-  // Schedule Switch
-  scheduleSwitch: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
-    marginBottom: 12
-  },
-  scheduleTab: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    marginRight: 8
-  },
-  scheduleTabActive: {
-    borderBottomColor: THEME.colors.primary
-  },
-  scheduleTabText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
-  },
-  scheduleTabTextActive: {
-    fontFamily: THEME.typography.fonts.bold,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-
-  // Alert Banner
-  alertBanner: {
-    backgroundColor: 'rgba(255, 159, 10, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 159, 10, 0.6)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16
-  },
-  alertBannerLeft: {
-    flexDirection: 'row',
+    paddingHorizontal: 20,
     alignItems: 'center',
     gap: 8
   },
-  playNowBadge: {
-    backgroundColor: THEME.colors.danger,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#151821',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)'
   },
-  playNowBadgeText: {
+  categoryChipActive: {
+    backgroundColor: THEME.colors.text,
+    borderColor: THEME.colors.text
+  },
+  categoryChipText: {
     fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: '#0A0B0E',
+    fontSize: 13,
+    color: THEME.colors.textMuted,
     includeFontPadding: false
   },
-  alertTitle: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
-    color: THEME.colors.text,
-    includeFontPadding: false
-  },
-  alertActionText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 12,
-    color: THEME.colors.danger,
-    includeFontPadding: false
+  categoryChipTextActive: {
+    color: THEME.colors.textOnPrimary
   },
 
-  // Section Header
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  sectionHeaderTitle: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    includeFontPadding: false
-  },
-  sectionHeaderMeta: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 11,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-
-  // Loading & Empty States
+  // Loading & Empty
   loadingContainer: {
-    paddingVertical: 40,
+    paddingVertical: 56,
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 12
   },
   loadingText: {
-    fontFamily: THEME.typography.fonts.medium,
-    fontSize: 12,
-    color: THEME.colors.textSecondary
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 13,
+    color: THEME.colors.textMuted,
+    includeFontPadding: false
   },
   emptyContainer: {
+    marginHorizontal: 20,
+    marginTop: 20,
     paddingVertical: 40,
     paddingHorizontal: 20,
     alignItems: 'center',
@@ -1061,18 +1324,19 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.card,
     borderRadius: THEME.radius.lg,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    marginTop: 8
+    borderColor: THEME.colors.cardBorder
   },
   emptyIcon: {
     fontSize: 40,
-    marginBottom: 12
+    marginBottom: 12,
+    includeFontPadding: false
   },
   emptyTitle: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 16,
     color: THEME.colors.text,
-    marginBottom: 6
+    marginBottom: 6,
+    includeFontPadding: false
   },
   emptySubtitle: {
     fontFamily: THEME.typography.fonts.regular,
@@ -1080,7 +1344,8 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 16
+    marginBottom: 16,
+    includeFontPadding: false
   },
   emptyBtn: {
     backgroundColor: THEME.colors.primary,
@@ -1091,309 +1356,400 @@ const styles = StyleSheet.create({
   emptyBtnText: {
     fontFamily: THEME.typography.fonts.bold,
     fontSize: 13,
-    color: THEME.colors.textOnPrimary
-  },
-
-  // Match Pass Ticket Cards
-  ticketList: {
-    gap: 16
-  },
-  matchPassCard: {
-    backgroundColor: THEME.colors.card,
-    borderRadius: THEME.radius.lg,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    overflow: 'hidden'
-  },
-  matchPassCardCancelled: {
-    borderColor: 'rgba(239, 68, 68, 0.35)',
-    opacity: 0.78
-  },
-  matchPassCardLocked: {
-    borderColor: 'rgba(255, 159, 10, 0.4)'
-  },
-  stubHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 8
-  },
-  stubHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  activityPill: {
-    backgroundColor: THEME.colors.cardElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  activityPillText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.accent,
-    letterSpacing: 0.5,
-    includeFontPadding: false
-  },
-  modePill: {
-    backgroundColor: THEME.colors.primaryMuted,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  modePillText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  modePillLocked: {
-    backgroundColor: 'rgba(255, 159, 10, 0.15)'
-  },
-  modePillLockedText: {
-    color: THEME.colors.warning
-  },
-  modePillCompleted: {
-    backgroundColor: 'rgba(52, 199, 89, 0.15)'
-  },
-  modePillCompletedText: {
-    color: THEME.colors.success
-  },
-  modePillCancelled: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)'
-  },
-  modePillCancelledText: {
-    color: '#FF6B6B'
-  },
-  hostText: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-
-  // Main Ticket Info
-  mainInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8
-  },
-  kickoffBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 78,
-    paddingRight: 6
-  },
-  kickoffEyebrow: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-    includeFontPadding: false
-  },
-  kickoffTime: {
-    fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 18,
-    color: THEME.colors.text,
-    marginVertical: 2,
-    includeFontPadding: false
-  },
-  kickoffDay: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-  verticalDivider: {
-    width: 1,
-    height: 48,
-    backgroundColor: THEME.colors.border,
-    marginRight: 12
-  },
-  detailsBox: {
-    flex: 1,
-    justifyContent: 'center'
-  },
-  matchTitle: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 14,
-    color: THEME.colors.text,
-    lineHeight: 18,
-    includeFontPadding: false
-  },
-  matchVenue: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    marginTop: 3,
-    includeFontPadding: false
-  },
-  karmaBadgeBox: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 159, 10, 0.12)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 6
-  },
-  karmaBadgeText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 9,
-    color: THEME.colors.warning,
-    includeFontPadding: false
-  },
-  matchCreditBadgeBox: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 159, 10, 0.12)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 6
-  },
-  matchCreditBadgeText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 9,
-    color: THEME.colors.warning,
-    includeFontPadding: false
-  },
-
-  // Quota Pips
-  quotaSection: {
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 10
-  },
-  quotaHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6
-  },
-  quotaTitle: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.5,
-    includeFontPadding: false
-  },
-  quotaRemaining: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.success,
-    includeFontPadding: false
-  },
-  pipsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4
-  },
-  pip: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)'
-  },
-  pipFutsal: {
-    height: 8,
-    borderRadius: 2
-  },
-  pipBadminton: {
-    height: 8,
-    borderRadius: 2
-  },
-  pipActive: {
-    backgroundColor: THEME.colors.primary
-  },
-  pipCancelled: {
-    backgroundColor: '#FF6B6B'
-  },
-
-  // Perforation Notch Divider
-  perforationWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-    height: 16
-  },
-  notchLeft: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: THEME.colors.background,
-    marginLeft: -7
-  },
-  dashedLine: {
-    flex: 1,
-    height: 1,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    borderStyle: 'dashed',
-    marginHorizontal: 6
-  },
-  notchRight: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: THEME.colors.background,
-    marginRight: -7
-  },
-
-  // Foot
-  ticketFoot: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10
-  },
-  costBox: {
-    justifyContent: 'center'
-  },
-  costLabel: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.textMuted,
-    letterSpacing: 0.6,
-    includeFontPadding: false
-  },
-  costValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginTop: 2
-  },
-  costAmount: {
-    fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 16,
-    color: THEME.colors.primary,
-    includeFontPadding: false
-  },
-  costPerOrg: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-  btnDetail: {
-    backgroundColor: THEME.colors.primary,
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  btnDetailText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 12,
     color: THEME.colors.textOnPrimary,
     includeFontPadding: false
   },
-  btnDetailCancelled: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)'
+
+  // Section Headers
+  sectionBlock: {
+    paddingTop: 20
   },
-  btnDetailCancelledText: {
-    color: '#FF6B6B'
+  paddedSection: {
+    paddingHorizontal: 20,
+    paddingTop: 26
+  },
+  sectionHeaderRow: {
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 12
+  },
+  sectionHeaderNoPad: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 12
+  },
+  sectionTitleWithDot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  voltDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: THEME.colors.primary
+  },
+  sectionHeading: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 17,
+    color: THEME.colors.text,
+    letterSpacing: -0.3,
+    includeFontPadding: false
+  },
+  sectionActionLink: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    includeFontPadding: false
+  },
+  sectionCountMeta: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    includeFontPadding: false
+  },
+
+  // 3. Hero Carousel ("Hampir Penuh")
+  heroCarouselWrapper: {
+    height: 282
+  },
+  heroCarouselContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 6,
+    gap: 12
+  },
+  heroCard: {
+    width: 290,
+    height: 276,
+    borderRadius: 24,
+    padding: 20,
+    overflow: 'hidden',
+    justifyContent: 'space-between'
+  },
+  heroCardVolt: {
+    backgroundColor: THEME.colors.primary
+  },
+  heroCardDark: {
+    backgroundColor: THEME.colors.card,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)'
+  },
+  sportWatermark: {
+    position: 'absolute',
+    right: -24,
+    top: -24,
+    opacity: 0.7
+  },
+  heroGhostFormat: {
+    position: 'absolute',
+    right: -10,
+    top: -8,
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 96,
+    letterSpacing: -4,
+    includeFontPadding: false
+  },
+  heroTopRail: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8
+  },
+  heroSportMeta: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 11,
+    letterSpacing: 1,
+    includeFontPadding: false
+  },
+  heroUrgencyText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 12,
+    includeFontPadding: false
+  },
+  heroMiddle: {
+    marginVertical: 4
+  },
+  heroKickoff: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 36,
+    letterSpacing: -1.4,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  heroTitle: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 17,
+    lineHeight: 22,
+    marginTop: 4,
+    includeFontPadding: false
+  },
+  heroVenue: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 12,
+    marginTop: 3,
+    includeFontPadding: false
+  },
+  heroGrid: {
+    flexDirection: 'row',
+    paddingTop: 10,
+    marginTop: 10,
+    borderTopWidth: 1
+  },
+  heroGridCol: {
+    flex: 1
+  },
+  heroGridColMid: {
+    flex: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    paddingHorizontal: 8
+  },
+  heroGridColRight: {
+    flex: 1,
+    paddingLeft: 8
+  },
+  heroGridLabel: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    includeFontPadding: false
+  },
+  heroGridValue: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 13,
+    marginTop: 3,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  heroGridSubValue: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 10,
+    includeFontPadding: false
+  },
+  heroBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    marginTop: 10,
+    borderTopWidth: 1
+  },
+  heroArrowBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+
+  // Facepile
+  facepileRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  facepileCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  facepileExtra: {
+    height: 28,
+    paddingHorizontal: 7,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  facepileText: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 10,
+    includeFontPadding: false
+  },
+
+  // 4. "Hari Ini" Full-Width Cards (C Biasa)
+  todayCardsList: {
+    gap: 12
+  },
+  todayCard: {
+    backgroundColor: '#171A24',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden'
+  },
+  todayTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  todayTimeWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline'
+  },
+  todayTimeText: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 26,
+    color: THEME.colors.text,
+    letterSpacing: -0.8,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  todayWibText: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    marginLeft: 6,
+    includeFontPadding: false
+  },
+  todaySportMeta: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    includeFontPadding: false
+  },
+  todayTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 15,
+    color: THEME.colors.text,
+    lineHeight: 20,
+    marginTop: 10,
+    includeFontPadding: false
+  },
+  todayVenueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4
+  },
+  todayVenueText: {
+    flex: 1,
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 12,
+    color: '#B8C0CE',
+    includeFontPadding: false
+  },
+  todayPipsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 12
+  },
+  todayPip: {
+    flex: 1,
+    height: 4,
+    borderRadius: 999
+  },
+  todayBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    marginTop: 10
+  },
+  todayBottomLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  todayPlayerStatus: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  kurangSatuHighlight: {
+    fontFamily: THEME.typography.fonts.bold
+  },
+  todayPriceNum: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 15,
+    color: THEME.colors.text,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  todayPriceFree: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 15,
+    includeFontPadding: false
+  },
+
+  // 5. "Besok" 2-Column Bento Grid (C Biasa)
+  bentoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10
+  },
+  bentoCard: {
+    backgroundColor: '#171A24',
+    borderRadius: 16,
+    padding: 14,
+    minHeight: 156,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    justifyContent: 'space-between',
+    overflow: 'hidden'
+  },
+  bentoTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start'
+  },
+  bentoSport: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    includeFontPadding: false
+  },
+  bentoTime: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 18,
+    color: THEME.colors.text,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  bentoTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 13,
+    color: THEME.colors.text,
+    lineHeight: 18,
+    marginTop: 8,
+    includeFontPadding: false
+  },
+  bentoVenue: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    marginTop: 4,
+    includeFontPadding: false
+  },
+  bentoBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)'
+  },
+  bentoPlayers: {
+    fontFamily: THEME.typography.fonts.medium,
+    fontSize: 10,
+    color: THEME.colors.textSecondary,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  bentoPrice: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 13,
+    color: THEME.colors.text,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
   }
 });
