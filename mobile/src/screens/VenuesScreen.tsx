@@ -1,19 +1,24 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TextInput,
-  TouchableOpacity,
+  Pressable,
+  Modal,
   ActivityIndicator,
   RefreshControl,
-  Linking
+  Linking,
+  Keyboard,
+  useWindowDimensions
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { THEME } from '../theme';
 import { MainTabParamList } from '../navigation/types';
+import BentoCard from '../components/BentoCard';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 import { api, ApiVenue } from '../services/api';
 import { supabase } from '../services/supabase';
@@ -80,55 +85,104 @@ const FALLBACK_VENUES: ApiVenue[] = [
   }
 ];
 
-function formatHourlyPrice(min: number, max: number): { formatted: string; isRange: boolean } {
-  if (!min && !max) return { formatted: 'Hubungi Venue', isRange: false };
-  if (min === max || !max || max <= min) {
-    return { formatted: `Rp ${min.toLocaleString('id-ID')} / jam`, isRange: false };
-  }
-  return {
-    formatted: `Rp ${min.toLocaleString('id-ID')} - ${max.toLocaleString('id-ID')} / jam`,
-    isRange: true
-  };
+const SPORT_FILTERS = ['Semua', 'Futsal', 'Badminton', 'Basket'] as const;
+const FACILITY_PREVIEW_COUNT = 3;
+
+function formatHourlyPrice(min: number, max: number): string | null {
+  if (!min && !max) return null;
+  const price = `IDR ${min.toLocaleString('id-ID')}`;
+  return max > min ? `${price}–${max.toLocaleString('id-ID')}` : price;
 }
 
-function getSportBadgeLabel(activities: string[] = []): string {
-  if (!activities || activities.length === 0) return '🏅 Multi-Sport';
-  const labels: string[] = [];
-  activities.forEach((act) => {
-    const a = act.toLowerCase();
-    if (a.includes('futsal')) labels.push('⚽ Futsal');
-    else if (a.includes('badminton')) labels.push('🏸 Badminton');
-    else if (a.includes('basket')) labels.push('🏀 Basket');
-    else if (a.includes('mini_soccer')) labels.push('⚽ Mini Soccer');
-    else labels.push(act.toUpperCase());
-  });
-  return labels.join(' & ');
+function getSportLabel(activities: string[]): string {
+  if (activities.length === 0) return 'Multi-Sport';
+  return activities.map((activity) => {
+    const name = activity.toLowerCase();
+    if (name.includes('futsal')) return 'Futsal';
+    if (name.includes('badminton')) return 'Badminton';
+    if (name.includes('basket')) return 'Basket';
+    if (name.includes('mini_soccer')) return 'Mini Soccer';
+    return activity.toUpperCase();
+  }).join(' & ');
 }
 
-function getFacilities(activities: string[] = []): string[] {
-  const common = ['🅿️ Parkir', '🥤 Kantin', '🚿 Ruang Ganti'];
-  if (activities.some((a) => a.includes('badminton'))) {
-    return [...common, '💡 Karpet Standar BWF'];
-  }
-  if (activities.some((a) => a.includes('futsal'))) {
-    return [...common, '🥅 Lapangan Vinyl'];
-  }
-  if (activities.some((a) => a.includes('basket'))) {
-    return [...common, '🏀 Ring Standar FIBA'];
-  }
-  return [...common, '📶 WiFi'];
+function getFacilities(activities: string[]): string[] {
+  const common = ['Parkir', 'Kantin', 'Ruang ganti'];
+  const sports = activities.map((activity) => activity.toLowerCase());
+  if (sports.some((sport) => sport.includes('badminton'))) return [...common, 'Karpet standar BWF'];
+  if (sports.some((sport) => sport.includes('futsal'))) return [...common, 'Lapangan vinyl'];
+  if (sports.some((sport) => sport.includes('basket'))) return [...common, 'Ring standar FIBA'];
+  return [...common, 'WiFi'];
+}
+
+const ICON_PATHS = {
+  search: 'M16 16l4 4M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z',
+  close: 'm6 6 12 12M18 6 6 18',
+  pin: 'M20 10c0 6-8 11-8 11s-8-5-8-11a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
+  verified: 'M12 2.5 15 4l3.4.6.6 3.4 1.5 3-1.5 3-.6 3.4-3.4.6-3 1.5-3-1.5-3.4-.6L5 14l-1.5-3L5 8l.6-3.4L9 4l3-1.5ZM8.5 11l2.5 2.5 4.5-4.5',
+  star: 'm12 3 2.7 5.6 6.2.9-4.5 4.4 1 6.1-5.4-2.9L6.6 20l1-6.1-4.5-4.4 6.2-.9L12 3Z',
+  arrow: 'M6 18 18 6M8 6h10v10',
+  chat: 'M20.5 11.5a8.5 8.5 0 0 1-12.2 7.7L4 20.5l1.3-4.3A8.5 8.5 0 1 1 20.5 11.5Z'
+} as const;
+
+function VenueIcon({ name, color = THEME.colors.textSecondary, size = 16 }: {
+  name: keyof typeof ICON_PATHS;
+  color?: string;
+  size?: number;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
+      <Path
+        d={ICON_PATHS[name]}
+        fill={name === 'star' ? color : 'none'}
+        stroke={color}
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+const COURT_DETAILS = {
+  futsal: <Circle cx={12} cy={8} r={3} />,
+  badminton: <Path d="M6.5 2v12m11-12v12" />,
+  basket: <Rect x={4} y={4} width={16} height={8} rx={4} />
+};
+
+function VenueCourt({ activities }: { activities: string[] }) {
+  const sport = activities
+    .map((activity) => activity.match(/futsal|soccer|badminton|basket/i)?.[0].toLowerCase())
+    .find(Boolean);
+  let detail: React.ReactNode = null;
+  if (sport === 'badminton' || sport === 'basket') detail = COURT_DETAILS[sport];
+  if (sport === 'futsal' || sport === 'soccer') detail = COURT_DETAILS.futsal;
+
+  return (
+    <View style={styles.sportMark} accessible={false}>
+      <Svg width={24} height={16} viewBox="0 0 24 16" fill="none" stroke={THEME.colors.primary} strokeWidth={1.25}>
+        <Rect x={1} y={2} width={22} height={12} rx={1.5} />
+        <Line x1={12} y1={2} x2={12} y2={14} />
+        {detail}
+      </Svg>
+    </View>
+  );
 }
 
 export default function VenuesScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const bottomPadding = 24;
+  const { width, fontScale } = useWindowDimensions();
+  const compact = width <= 355;
+  const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const searchRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [venues, setVenues] = useState<ApiVenue[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
 
-  const [selectedFilter, setSelectedFilter] = useState('Semua');
+  const [selectedFilter, setSelectedFilter] = useState<(typeof SPORT_FILTERS)[number]>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [facilityDetails, setFacilityDetails] = useState<{ venue: string; items: string[] } | null>(null);
 
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
@@ -162,15 +216,12 @@ export default function VenuesScreen({ navigation }: Props) {
       const data = await api.getVenues();
       if (data && Array.isArray(data) && data.length > 0) {
         setVenues(data);
-        setIsLiveConnected(true);
       } else {
         setVenues(FALLBACK_VENUES);
-        setIsLiveConnected(false);
       }
     } catch (err) {
       console.warn('[VenuesScreen] Gagal memuat venues dari API, menggunakan fallback:', err);
       setVenues(FALLBACK_VENUES);
-      setIsLiveConnected(false);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -199,30 +250,6 @@ export default function VenuesScreen({ navigation }: Props) {
       supabase.removeChannel(channel);
     };
   }, [fetchVenues]);
-
-  // Hitung jumlah venue per filter tab secara dinamis
-  const filterCounts = useMemo(() => {
-    const all = venues.length;
-    let futsal = 0;
-    let badminton = 0;
-    let basket = 0;
-
-    venues.forEach((v) => {
-      const acts = v.supported_activities?.map((a) => a.toLowerCase()) || [];
-      if (acts.some((a) => a.includes('futsal') || a.includes('soccer'))) futsal++;
-      if (acts.some((a) => a.includes('badminton'))) badminton++;
-      if (acts.some((a) => a.includes('basket'))) basket++;
-    });
-
-    return { all, futsal, badminton, basket };
-  }, [venues]);
-
-  const filterTabs = [
-    { id: 'Semua', label: `Semua Venue (${filterCounts.all})` },
-    { id: 'Futsal', label: `⚽ Futsal (${filterCounts.futsal})` },
-    { id: 'Badminton', label: `🏸 Badminton (${filterCounts.badminton})` },
-    { id: 'Basket', label: `🏀 Basket (${filterCounts.basket})` }
-  ];
 
   // Filtering data
   const filteredVenues = useMemo(() => {
@@ -278,12 +305,84 @@ export default function VenuesScreen({ navigation }: Props) {
     }
   };
 
+  const updateSearch = (query: string) => {
+    setSearchQuery(query);
+    listRef.current?.scrollTo({ y: 0, animated: false });
+  };
+
+  const closeFacilities = () => setFacilityDetails(null);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle} accessibilityRole="header">Daftar Venue</Text>
+        <View style={styles.region}>
+          <VenueIcon name="pin" size={14} color={THEME.colors.primary} />
+          <Text style={styles.regionText}>Jabodetabek</Text>
+        </View>
+
+        <View style={[styles.searchBar, searchFocused && styles.searchBarFocused]}>
+          <VenueIcon name="search" size={18} />
+          <TextInput
+            ref={searchRef}
+            style={styles.searchInput}
+            accessibilityLabel="Cari nama venue atau area"
+            placeholder="Cari nama venue atau area"
+            placeholderTextColor={THEME.colors.textMuted}
+            selectionColor={THEME.colors.primary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            value={searchQuery}
+            onChangeText={updateSearch}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Hapus pencarian"
+              style={styles.iconTarget}
+              onPress={() => {
+                updateSearch('');
+                searchRef.current?.focus();
+              }}
+            >
+              <VenueIcon name="close" />
+            </Pressable>
+          )}
+        </View>
+
+        <View style={styles.filters}>
+          {SPORT_FILTERS.map((sport) => {
+            const selected = selectedFilter === sport;
+            return (
+              <Pressable
+                key={sport}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={styles.filterTarget}
+                onPress={() => {
+                  setSelectedFilter(sport);
+                  listRef.current?.scrollTo({ y: 0, animated: false });
+                }}
+              >
+                <View style={[styles.filterChip, selected && styles.filterChipSelected]}>
+                  <Text style={[styles.filterLabel, selected && styles.filterLabelSelected]}>{sport}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomPadding }]}
+        ref={listRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.catalog}
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -293,174 +392,171 @@ export default function VenuesScreen({ navigation }: Props) {
           />
         }
       >
-        {/* Top App Bar (Figma SCR-10 191:13) */}
-        <View style={styles.topAppBar}>
-          <View style={styles.titleBox}>
-            <Text style={styles.headerTitle}>Daftar Venue</Text>
-            <Text style={styles.headerSubtitle}>
-              Pilihan Lapangan Olahraga Terverifikasi
-            </Text>
+        {isLoading ? (
+          <View style={styles.catalogState} accessibilityLiveRegion="polite">
+            <ActivityIndicator color={THEME.colors.primary} />
+            <Text style={styles.stateDescription}>Memuat katalog venue...</Text>
           </View>
-          <View style={styles.locationPill}>
-            <Text style={styles.locationPillText}>📍 Jabodetabek</Text>
-          </View>
-        </View>
+        ) : (
+          <>
+            <View style={styles.resultCount}>
+              <Text style={styles.resultCountText} accessibilityLiveRegion="polite">
+                {filteredVenues.length} venue
+              </Text>
+              <View style={styles.resultRule} />
+            </View>
 
-        {/* Search Bar Container (Figma 191:19) */}
-        <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Cari nama GOR, area, fasilitas..."
-            placeholderTextColor={THEME.colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
+            {filteredVenues.length === 0 ? (
+              <View style={styles.catalogState}>
+                <Text style={styles.emptyTitle} accessibilityRole="header">Venue belum ditemukan</Text>
+                <Text style={styles.stateDescription}>Coba nama atau area lain, atau ubah filter olahraga.</Text>
+              </View>
+            ) : (
+              <View style={styles.venueList}>
+                {filteredVenues.map((item) => {
+                  const activities = item.supported_activities ?? [];
+                  const facilities = getFacilities(activities);
+                  const price = formatHourlyPrice(item.rate_hourly_min, item.rate_hourly_max);
+                  const city = item.city || 'Tangerang';
 
-        {/* Filter Chips Row (Figma 191:23) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {filterTabs.map((tab) => {
-            const isActive = selectedFilter === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.filterChip, isActive && styles.filterChipActive]}
-                activeOpacity={0.7}
-                onPress={() => setSelectedFilter(tab.id)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    isActive && styles.filterChipTextActive
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Loading Indicator */}
-        {isLoading && !isRefreshing && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={THEME.colors.primary} />
-            <Text style={styles.loadingText}>Memuat katalog venue...</Text>
-          </View>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && filteredVenues.length === 0 && (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🏟️</Text>
-            <Text style={styles.emptyTitle}>Venue Tidak Ditemukan</Text>
-            <Text style={styles.emptySubtitle}>
-              Tidak ada lapangan yang cocok dengan pencarian "{searchQuery}".
-            </Text>
-          </View>
-        )}
-
-        {/* Venues Card List (Figma 191:32) */}
-        {!isLoading && (
-          <View style={styles.venueList}>
-            {filteredVenues.map((item) => {
-              const priceInfo = formatHourlyPrice(item.rate_hourly_min, item.rate_hourly_max);
-              const sportLabel = getSportBadgeLabel(item.supported_activities);
-              const facilities = getFacilities(item.supported_activities);
-
-              return (
-                <View key={item.id} style={styles.venueCard}>
-                  {/* Card Banner Header */}
-                  <View style={styles.cardHeaderBox}>
-                    <View style={styles.badgeRow}>
-                      <View style={styles.verifiedBadge}>
-                        <Text style={styles.verifiedText}>TERVERIFIKASI ✓</Text>
+                  return (
+                    <BentoCard
+                      key={item.id}
+                      accentColor={null}
+                      padded={false}
+                      style={[styles.venueCard, compact && styles.venueCardCompact]}
+                    >
+                      <View style={styles.venueMeta}>
+                        <VenueCourt activities={activities} />
+                        <View style={styles.sportInfo}>
+                          <Text style={styles.sportLabel}>{getSportLabel(activities)}</Text>
+                          <View style={styles.verification}>
+                            <VenueIcon name="verified" size={13} color={THEME.colors.success} />
+                            <Text style={styles.verificationText}>Terverifikasi</Text>
+                          </View>
+                        </View>
+                        <View style={styles.rating} accessible accessibilityLabel="Rating 4,9">
+                          <VenueIcon name="star" size={14} color={THEME.colors.primary} />
+                          <Text style={styles.ratingText}>4,9</Text>
+                        </View>
                       </View>
-                      <TouchableOpacity
-                        style={styles.distanceBadge}
+
+                      <Text style={styles.venueName} accessibilityRole="header">{item.name}</Text>
+                      <Pressable
+                        accessibilityRole="link"
+                        accessibilityLabel={'Lokasi ' + item.name + ', ' + [item.address, city].filter(Boolean).join(', ')}
+                        accessibilityHint="Buka Google Maps"
                         onPress={() => handleOpenMaps(item.name, item.maps_url)}
+                        style={({ pressed }) => [styles.venueLocation, pressed && styles.pressed]}
                       >
-                        <Text style={styles.distanceText}>
-                          📍 {item.city || 'Tangerang'} · Maps ↗
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                        <VenueIcon name="pin" size={15} />
+                        <View style={styles.address}>
+                          <Text style={styles.addressText}>{item.address}</Text>
+                          <Text style={styles.cityText}>{city}</Text>
+                        </View>
+                        <VenueIcon name="arrow" size={15} color={THEME.colors.textMuted} />
+                      </Pressable>
 
-                    <View style={[styles.badgeRow, { marginTop: 6 }]}>
-                      <View style={styles.sportBadge}>
-                        <Text style={styles.sportBadgeText}>{sportLabel}</Text>
+                      <View style={styles.facilities}>
+                        <Text style={styles.facilitySummary}>{facilities.slice(0, FACILITY_PREVIEW_COUNT).join(' · ')}</Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={'Lihat semua fasilitas ' + item.name}
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            setFacilityDetails({ venue: item.name, items: facilities });
+                          }}
+                          style={({ pressed }) => [styles.facilitiesTarget, pressed && styles.pressed]}
+                        >
+                          <Text style={styles.facilityCount}>+{facilities.length - FACILITY_PREVIEW_COUNT}</Text>
+                        </Pressable>
                       </View>
-                      <View style={styles.ratingBadge}>
-                        <Text style={styles.ratingText}>★ 4.9 (Teruji)</Text>
+
+                      <View style={[
+                        styles.venueFooter,
+                        compact && styles.venueFooterCompact,
+                        fontScale >= 1.5 && styles.venueFooterStacked
+                      ]}>
+                        <View style={styles.price}>
+                          <Text style={[styles.priceText, compact && styles.priceTextCompact]}>
+                            {price ?? 'Hubungi venue'}
+                          </Text>
+                          {price !== null && <Text style={styles.priceUnit}>per jam</Text>}
+                        </View>
+                        <View style={styles.actions}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={'Chat pengelola ' + item.name}
+                            onPress={() => handleOpenWhatsApp(item.name, item.contact_whatsapp)}
+                            style={({ pressed }) => [styles.iconTarget, styles.chatButton, pressed && styles.pressed]}
+                          >
+                            <VenueIcon name="chat" />
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={'Buat sesi di ' + item.name}
+                            onPress={() =>
+                              navigation.navigate('Create', {
+                                preselectedVenueId: item.id,
+                                preselectedVenueName: item.name,
+                                preselectedRate: item.rate_hourly_min
+                              })
+                            }
+                            style={({ pressed }) => [
+                              styles.createButton,
+                              compact && styles.createButtonCompact,
+                              pressed && styles.createButtonPressed
+                            ]}
+                          >
+                            <Text style={styles.createButtonText}>Buat sesi</Text>
+                            {!compact && <VenueIcon name="arrow" size={14} color={THEME.colors.textOnPrimary} />}
+                          </Pressable>
+                        </View>
                       </View>
-                    </View>
-                  </View>
-
-                  {/* Title & Price Row (Fully Responsive, Anti-Clipping) */}
-                  <View style={styles.venueTitleRow}>
-                    <View style={styles.venueNameBox}>
-                      <Text style={styles.venueName} numberOfLines={2}>
-                        {item.name}
-                      </Text>
-                    </View>
-                    <View style={styles.venuePriceBox}>
-                      <Text style={styles.venuePriceText} numberOfLines={2}>
-                        {priceInfo.formatted}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Address */}
-                  <Text style={styles.venueAddress} numberOfLines={2}>
-                    {item.address}
-                  </Text>
-
-                  {/* Facilities Chips */}
-                  <View style={styles.facilitiesRow}>
-                    {facilities.map((fac, idx) => (
-                      <View key={idx} style={styles.facilityChip}>
-                        <Text style={styles.facilityText}>{fac}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Card Action Buttons */}
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity
-                      style={styles.chatBtn}
-                      activeOpacity={0.8}
-                      onPress={() => handleOpenWhatsApp(item.name, item.contact_whatsapp)}
-                    >
-                      <Text style={styles.chatBtnText}>💬 Chat Pengelola</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.useBtn}
-                      activeOpacity={0.8}
-                      onPress={() =>
-                        navigation.navigate('Create', {
-                          preselectedVenueId: item.id,
-                          preselectedVenueName: item.name,
-                          preselectedRate: item.rate_hourly_min
-                        })
-                      }
-                    >
-                      <Text style={styles.useBtnText}>⚡ Pakai Buat Sesi</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
+                    </BentoCard>
+                  );
+                })}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
 
-      {/* Custom Alert Modal */}
+      {facilityDetails && (
+        <Modal transparent visible animationType="fade" onRequestClose={closeFacilities}>
+          <View style={[styles.sheetOverlay, { paddingBottom: Math.max(insets.bottom, GRID) }]}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              accessible={false}
+              importantForAccessibility="no"
+              onPress={closeFacilities}
+            />
+            <View style={styles.sheet} accessibilityViewIsModal onAccessibilityEscape={closeFacilities}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle} accessibilityRole="header">Fasilitas venue</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tutup fasilitas"
+                  style={styles.iconTarget}
+                  onPress={closeFacilities}
+                >
+                  <VenueIcon name="close" />
+                </Pressable>
+              </View>
+              <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent}>
+                <Text style={styles.sheetVenue}>{facilityDetails.venue}</Text>
+                {facilityDetails.items.map((facility) => (
+                  <View key={facility} style={styles.sheetFacility}>
+                    <Text accessible={false} importantForAccessibility="no" style={styles.sheetFacilityText}>•</Text>
+                    <Text style={styles.sheetFacilityText}>{facility}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
+
       <CustomAlertModal
         visible={alertConfig.visible}
         type={alertConfig.type}
@@ -473,342 +569,367 @@ export default function VenuesScreen({ navigation }: Props) {
   );
 }
 
+const GRID = THEME.spatial.gridUnit;
+const TOUCH_TARGET = THEME.components.fabButton.height;
+const textSmall = { ...THEME.typography.bodySmall, fontSize: THEME.typography.caption.fontSize };
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: THEME.colors.background
   },
-  container: {
-    flex: 1,
-    backgroundColor: THEME.colors.background
-  },
-  contentContainer: {
+  header: {
     paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
-    paddingTop: 8,
-    paddingBottom: 120
-  },
-
-  // Top App Bar (Figma SCR-10 191:13)
-  topAppBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  titleBox: {
-    flex: 1
+    paddingTop: GRID * 3,
+    paddingBottom: GRID / 2
   },
   headerTitle: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 20,
-    color: THEME.colors.text,
-    includeFontPadding: false
+    ...THEME.typography.h1,
+    color: THEME.colors.text
   },
-  headerSubtitle: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    marginTop: 2,
-    includeFontPadding: false
-  },
-  locationPill: {
-    backgroundColor: THEME.colors.cardElevated,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8
-  },
-  locationPillText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 11,
-    color: THEME.colors.text,
-    includeFontPadding: false
-  },
-
-  // Live Database Indicator
-  liveIndicatorRow: {
+  region: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 12,
-    paddingHorizontal: 2
+    marginTop: GRID / 2
   },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5
-  },
-  liveIndicatorText: {
-    fontFamily: THEME.typography.fonts.medium,
-    fontSize: 10,
+  regionText: {
+    ...THEME.typography.body,
     color: THEME.colors.textSecondary
   },
-
-  // Search Bar (Figma 191:19)
   searchBar: {
-    height: 42,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    marginBottom: 12
+    gap: GRID,
+    minHeight: THEME.components.buttonPrimary.height,
+    marginTop: GRID * 2,
+    marginBottom: GRID,
+    paddingLeft: GRID * 1.5,
+    paddingRight: GRID / 2,
+    backgroundColor: THEME.colors.cardElevated,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    borderRadius: THEME.radius.md
   },
-  searchIcon: {
-    fontSize: 14,
-    marginRight: 8
+  searchBarFocused: {
+    borderColor: THEME.colors.borderActive
   },
   searchInput: {
+    ...THEME.typography.body,
     flex: 1,
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 12,
-    color: THEME.colors.text,
-    includeFontPadding: false,
-    paddingVertical: 0
+    minWidth: 0,
+    minHeight: TOUCH_TARGET,
+    paddingVertical: GRID,
+    fontSize: THEME.typography.cardTitle.fontSize,
+    lineHeight: THEME.typography.cardTitle.lineHeight,
+    color: THEME.colors.text
   },
-
-  // Filter Chips Row (Figma 191:23)
-  filterScroll: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingBottom: 14
-  },
-  filterChip: {
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+  iconTarget: {
+    flexShrink: 0,
+    minWidth: TOUCH_TARGET,
+    minHeight: TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  filterChipActive: {
-    backgroundColor: THEME.colors.primary,
-    borderColor: THEME.colors.primary
-  },
-  filterChipText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-  filterChipTextActive: {
-    color: THEME.colors.textOnPrimary
-  },
-
-  // Loading & Empty States
-  loadingContainer: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12
-  },
-  loadingText: {
-    fontFamily: THEME.typography.fonts.medium,
-    fontSize: 12,
-    color: THEME.colors.textSecondary
-  },
-  emptyContainer: {
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: THEME.colors.card,
-    borderRadius: THEME.radius.lg,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    marginTop: 8
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 12
-  },
-  emptyTitle: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 16,
-    color: THEME.colors.text,
-    marginBottom: 6
-  },
-  emptySubtitle: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 12,
-    color: THEME.colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18
-  },
-
-  // Venue Cards (Figma 191:32)
-  venueList: {
-    gap: 14
-  },
-  venueCard: {
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderRadius: 14,
-    padding: 12,
-    gap: 8
-  },
-  cardHeaderBox: {
-    backgroundColor: THEME.colors.cardElevated,
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(192, 194, 184, 0.15)'
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  verifiedBadge: {
-    backgroundColor: THEME.colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  verifiedText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.textOnPrimary,
-    includeFontPadding: false
-  },
-  distanceBadge: {
-    backgroundColor: THEME.colors.background,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  distanceText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.text,
-    includeFontPadding: false
-  },
-  sportBadge: {
-    backgroundColor: THEME.colors.background,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  sportBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 9,
-    color: THEME.colors.text,
-    includeFontPadding: false
-  },
-  ratingBadge: {
-    backgroundColor: THEME.colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  ratingText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textOnPrimary,
-    includeFontPadding: false
-  },
-
-  // Responsive Title & Price Layout (Fixes Clipping)
-  venueTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginTop: 2
-  },
-  venueNameBox: {
-    flex: 1
-  },
-  venueName: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 14,
-    color: THEME.colors.text,
-    lineHeight: 19,
-    includeFontPadding: false
-  },
-  venuePriceBox: {
-    flexShrink: 0,
-    alignItems: 'flex-end',
-    maxWidth: '48%'
-  },
-  venuePriceText: {
-    fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 12,
-    color: THEME.colors.primary,
-    textAlign: 'right',
-    lineHeight: 17,
-    includeFontPadding: false
-  },
-  venueAddress: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-  facilitiesRow: {
+  filters: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 2
+    gap: 6
   },
-  facilityChip: {
-    backgroundColor: THEME.colors.cardElevated,
+  filterTarget: {
+    flexGrow: 1,
+    minHeight: TOUCH_TARGET,
+    justifyContent: 'center'
+  },
+  filterChip: {
+    minHeight: GRID * 4,
+    paddingHorizontal: GRID,
+    paddingVertical: GRID / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(192, 194, 184, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4
+    borderColor: THEME.colors.cardBorder,
+    borderRadius: THEME.radius.md
   },
-  facilityText: {
+  filterChipSelected: {
+    backgroundColor: THEME.colors.primaryMuted,
+    borderColor: THEME.colors.primaryBorder
+  },
+  filterLabel: {
+    ...THEME.typography.bodySmall,
     fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 9,
+    color: THEME.colors.textSecondary
+  },
+  filterLabelSelected: {
+    color: THEME.colors.primary
+  },
+  scroll: {
+    flex: 1
+  },
+  catalog: {
+    flexGrow: 1,
+    paddingHorizontal: THEME.spatial.screenPaddingHorizontal,
+    paddingTop: GRID / 2,
+    paddingBottom: GRID * 2
+  },
+  catalogState: {
+    alignItems: 'center',
+    gap: GRID / 2,
+    paddingHorizontal: GRID,
+    paddingVertical: GRID * 3
+  },
+  emptyTitle: {
+    ...THEME.typography.cardTitle,
+    color: THEME.colors.text,
+    textAlign: 'center'
+  },
+  stateDescription: {
+    ...THEME.typography.bodySmall,
     color: THEME.colors.textSecondary,
-    includeFontPadding: false
+    textAlign: 'center'
   },
-  actionRow: {
+  resultCount: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 6
+    alignItems: 'center',
+    gap: GRID * 1.5,
+    marginBottom: GRID * 1.5
   },
-  chatBtn: {
+  resultCountText: {
+    ...THEME.typography.bodySmall,
+    fontFamily: THEME.typography.fonts.semiBold,
+    color: THEME.colors.textSecondary
+  },
+  resultRule: {
     flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: THEME.colors.border
+  },
+  venueList: {
+    gap: GRID * 1.5
+  },
+  venueCard: {
+    padding: 14
+  },
+  venueCardCompact: {
+    paddingHorizontal: GRID * 1.5
+  },
+  venueMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: GRID,
+    marginBottom: GRID
+  },
+  sportMark: {
+    width: 38,
     height: 38,
-    borderRadius: 8,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: THEME.radius.sm,
+    borderTopLeftRadius: THEME.radius.lg,
+    backgroundColor: THEME.colors.primaryMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: THEME.colors.primaryMuted
+  },
+  sportInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  sportLabel: {
+    ...THEME.typography.bodySmall,
+    fontFamily: THEME.typography.fonts.semiBold,
+    color: THEME.colors.textSecondary
+  },
+  verification: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: GRID / 2
+  },
+  verificationText: {
+    ...textSmall,
+    flexShrink: 1,
+    color: THEME.colors.success
+  },
+  rating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: GRID / 2
+  },
+  ratingText: {
+    ...THEME.typography.bodySmall,
+    fontFamily: THEME.typography.fonts.bold,
+    color: THEME.colors.text
+  },
+  venueName: {
+    ...THEME.typography.cardTitle,
+    color: THEME.colors.text
+  },
+  venueLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: TOUCH_TARGET,
+    gap: GRID,
+    paddingVertical: GRID / 2
+  },
+  address: {
+    flex: 1,
+    minWidth: 0
+  },
+  addressText: {
+    ...THEME.typography.bodySmall,
+    color: THEME.colors.textSecondary
+  },
+  cityText: {
+    ...textSmall,
+    color: THEME.colors.textMuted
+  },
+  facilities: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: TOUCH_TARGET,
+    gap: GRID / 2
+  },
+  facilitySummary: {
+    ...textSmall,
+    flex: 1,
+    color: THEME.colors.textSecondary
+  },
+  facilitiesTarget: {
+    minWidth: TOUCH_TARGET,
+    minHeight: TOUCH_TARGET,
+    alignItems: 'flex-end',
+    justifyContent: 'center'
+  },
+  facilityCount: {
+    ...THEME.typography.caption,
+    minWidth: GRID * 4,
+    paddingHorizontal: GRID / 2,
+    paddingVertical: 2,
+    color: THEME.colors.textSecondary,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    borderRadius: THEME.radius.sm,
+    textAlign: 'center'
+  },
+  venueFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: GRID,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: THEME.colors.border
+  },
+  venueFooterCompact: {
+    gap: GRID / 2
+  },
+  venueFooterStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch'
+  },
+  price: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0
+  },
+  priceText: {
+    ...THEME.typography.body,
+    fontFamily: THEME.typography.fonts.bold,
+    color: THEME.colors.text
+  },
+  priceTextCompact: {
+    fontSize: THEME.typography.bodySmall.fontSize
+  },
+  priceUnit: {
+    ...textSmall,
+    color: THEME.colors.textMuted
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6
+  },
+  chatButton: {
+    borderRadius: THEME.radius.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder
+  },
+  pressed: {
+    opacity: 0.7
+  },
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: TOUCH_TARGET,
+    minWidth: GRID * 11,
+    gap: GRID / 2,
+    paddingHorizontal: 10,
+    paddingVertical: GRID,
+    backgroundColor: THEME.colors.primary,
+    borderRadius: THEME.radius.md
+  },
+  createButtonCompact: {
+    minWidth: 76,
+    paddingHorizontal: GRID
+  },
+  createButtonPressed: {
+    backgroundColor: THEME.colors.primaryLight
+  },
+  createButtonText: {
+    ...THEME.typography.bodySmall,
+    fontFamily: THEME.typography.fonts.bold,
+    color: THEME.colors.textOnPrimary
+  },
+  sheetOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    backgroundColor: THEME.colors.overlay,
+    paddingHorizontal: GRID
+  },
+  sheet: {
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '85%',
+    paddingHorizontal: GRID * 2,
+    paddingTop: GRID,
+    paddingBottom: GRID * 2,
     backgroundColor: THEME.colors.cardElevated,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center'
+    borderRadius: THEME.radius.xl
   },
-  chatBtnText: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 11,
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: GRID
+  },
+  sheetTitle: {
+    ...THEME.typography.h2,
     color: THEME.colors.text,
-    includeFontPadding: false
+    flexShrink: 1
   },
-  useBtn: {
-    flex: 1,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center'
+  sheetScroll: {
+    flexGrow: 0
   },
-  useBtnText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 11,
-    color: THEME.colors.textOnPrimary,
-    includeFontPadding: false
+  sheetContent: {
+    gap: GRID / 2
+  },
+  sheetVenue: {
+    ...THEME.typography.subtitle,
+    color: THEME.colors.text,
+    marginBottom: GRID / 2
+  },
+  sheetFacility: {
+    flexDirection: 'row',
+    gap: GRID
+  },
+  sheetFacilityText: {
+    ...THEME.typography.body,
+    color: THEME.colors.textSecondary,
+    flexShrink: 1
   }
 });
