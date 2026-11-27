@@ -52,12 +52,11 @@ const ATTENDANCE_OPTIONS: Array<{ value: ReviewAttendance; label: string; color:
 const SPORTSMANSHIP_OPTIONS: Array<{
   value: ReviewSportsmanship;
   label: string;
-  hint: string;
   color: string;
 }> = [
-  { value: 'poor', label: 'KURANG', hint: 'Kurang enak', color: THEME.colors.danger },
-  { value: 'okay', label: 'STANDAR', hint: 'Biasa aja', color: THEME.colors.textSecondary },
-  { value: 'good', label: 'ASIK', hint: 'Enak diajak', color: THEME.colors.success }
+  { value: 'poor', label: 'Kurang', color: THEME.colors.danger },
+  { value: 'okay', label: 'Standar', color: THEME.colors.textSecondary },
+  { value: 'good', label: 'Asik', color: THEME.colors.success }
 ];
 
 const LEVEL_OPTIONS: Array<{ value: ReviewLevelFit; label: string }> = [
@@ -109,7 +108,9 @@ export default function RatingModal({
 
   const ratedCount = useMemo(
     () =>
-      Object.values(draft).filter((d) => d.attendance !== null && d.sportsmanship !== null).length,
+      Object.values(draft).filter(
+        (d) => d.attendance !== null && d.sportsmanship !== null && d.level_fit !== null
+      ).length,
     [draft]
   );
 
@@ -143,7 +144,7 @@ export default function RatingModal({
         target_participant_id: t.participant_id,
         attendance: entry.attendance as ReviewAttendance,
         sportsmanship: entry.sportsmanship as ReviewSportsmanship,
-        level_fit: entry.level_fit ?? 'accurate',
+        level_fit: entry.level_fit as ReviewLevelFit,
         notes: composed.length > 0 ? composed.slice(0, 500) : null,
         is_guest: t.is_guest
       };
@@ -296,16 +297,16 @@ export default function RatingModal({
                     </View>
 
                     <Text style={styles.fieldLabel}>SPORTIVITAS</Text>
-                    <View style={styles.ratingRow}>
+                    <View style={styles.chipRow}>
                       {SPORTSMANSHIP_OPTIONS.map((option) => {
                         const active = entry.sportsmanship === option.value;
                         return (
                           <TouchableOpacity
                             key={option.value}
                             style={[
-                              styles.ratingBtn,
+                              styles.chip,
                               active && {
-                                backgroundColor: option.color + '1F',
+                                backgroundColor: option.color + '24',
                                 borderColor: option.color
                               }
                             ]}
@@ -316,14 +317,16 @@ export default function RatingModal({
                             accessibilityLabel={option.label}
                             accessibilityState={{ selected: active }}
                           >
-                            <Text style={[styles.ratingBtnLabel, active && { color: option.color }]}>
-                              {option.label}
-                            </Text>
                             <Text
-                              style={[styles.ratingBtnHint, active && { color: option.color }]}
-                              numberOfLines={1}
+                              style={[
+                                styles.chipText,
+                                active && {
+                                  color: option.color,
+                                  fontFamily: THEME.typography.fonts.bold
+                                }
+                              ]}
                             >
-                              {option.hint}
+                              {option.label}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -356,7 +359,7 @@ export default function RatingModal({
                       </View>
                     ) : null}
 
-                    <Text style={styles.fieldLabel}>LEVEL MAIN · OPSIONAL</Text>
+                    <Text style={styles.fieldLabel}>LEVEL MAIN</Text>
                     <View style={styles.chipRow}>
                       {LEVEL_OPTIONS.map((option) => {
                         const active = entry.level_fit === option.value;
@@ -404,7 +407,7 @@ export default function RatingModal({
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 8, 20) }]}>
             {!allRated && targets.length > 0 ? (
               <Text style={styles.footerHint}>
-                Lengkapi kehadiran &amp; sportivitas semua peserta dulu
+                Lengkapi kehadiran, sportivitas &amp; level main semua peserta dulu
               </Text>
             ) : null}
             <CustomButton
@@ -683,37 +686,6 @@ const styles = StyleSheet.create({
   chipLevelTextActive: {
     color: THEME.colors.textOnPrimary,
     fontFamily: THEME.typography.fonts.bold
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    gap: 8
-  },
-  ratingBtn: {
-    flex: 1,
-    minHeight: 58,
-    paddingHorizontal: 8,
-    paddingVertical: 9,
-    borderRadius: 12,
-    backgroundColor: '#1B1F2B',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2
-  },
-  ratingBtnLabel: {
-    fontFamily: THEME.typography.fonts.extraBold,
-    fontSize: 13,
-    letterSpacing: 0.4,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
-  },
-  ratingBtnHint: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 9.5,
-    color: THEME.colors.textMuted,
-    textAlign: 'center',
-    includeFontPadding: false
   },
   reasonWrap: {
     gap: 6,
