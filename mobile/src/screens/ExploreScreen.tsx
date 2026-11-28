@@ -485,8 +485,9 @@ export default function ExploreScreen({ navigation }: Props) {
   }, [loadUserProfile, fetchSessionsData]);
 
   useEffect(() => {
+    const channelName = `explore-live-updates-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const channel = supabase
-      .channel('explore-live-updates')
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
         fetchSessionsData(false);
       })
