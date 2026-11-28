@@ -927,7 +927,7 @@ export default function ExploreScreen({ navigation }: Props) {
                                 { color: isFirst ? THEME.colors.textOnPrimary : THEME.colors.text }
                               ]}
                             >
-                              {price.isFree ? 'Gratis' : `Rp ${price.numStr}k`}
+                              {price.isFree ? 'Gratis' : `IDR ${price.numStr}k`}
                             </Text>
                           </View>
                         </View>
@@ -1069,7 +1069,7 @@ export default function ExploreScreen({ navigation }: Props) {
                                 Gratis
                               </Text>
                             ) : (
-                              <Text style={styles.todayPriceNum}>Rp {price.numStr}k</Text>
+                              <Text style={styles.todayPriceNum}>IDR {price.numStr}k</Text>
                             )}
                           </View>
                         </View>
@@ -1130,7 +1130,7 @@ export default function ExploreScreen({ navigation }: Props) {
                               price.isFree && { color: st.textHex }
                             ]}
                           >
-                            {price.isFree ? 'Gratis' : `Rp ${price.numStr}k`}
+                            {price.isFree ? 'Gratis' : `IDR ${price.numStr}k`}
                           </Text>
                         </View>
                       </TouchableOpacity>

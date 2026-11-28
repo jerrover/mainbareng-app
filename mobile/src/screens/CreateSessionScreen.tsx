@@ -715,7 +715,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
                       </View>
                       <View style={styles.venueCardRight}>
                         <Text style={styles.venueCardRate}>
-                          Rp {v.rate_hourly_min.toLocaleString('id-ID')}/jam
+                          IDR {v.rate_hourly_min.toLocaleString('id-ID')}/jam
                         </Text>
                         {isSelected && (
                           <View style={styles.checkBadge}>
@@ -869,7 +869,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
                 onChangeText={setTotalCost}
                 keyboardType="numeric"
                 placeholder="200000"
-                leftIcon="Rp"
+                leftIcon="IDR"
               />
             </View>
 
@@ -883,7 +883,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
               </View>
               <View style={styles.patunganCalcPriceRow}>
                 <Text style={styles.patunganCalcPrice}>
-                  {parsedCost > 0 ? `Rp ${splitPerPerson.toLocaleString('id-ID')}` : 'Gratis'}
+                  {parsedCost > 0 ? `IDR ${splitPerPerson.toLocaleString('id-ID')}` : 'Gratis'}
                 </Text>
                 {parsedCost > 0 && <Text style={styles.patunganCalcPerOrg}> / pemain</Text>}
               </View>
@@ -948,7 +948,7 @@ export default function CreateSessionScreen({ navigation, route }: Props) {
                   />
                 }
                 priceLabel="EST. PATUNGAN"
-                priceValue={parsedCost > 0 ? `Rp ${splitPerPerson.toLocaleString('id-ID')} / org` : 'Gratis'}
+                priceValue={parsedCost > 0 ? `IDR ${splitPerPerson.toLocaleString('id-ID')} / org` : 'Gratis'}
               >
                 <QuotaPips
                   filled={1}

@@ -4,14 +4,15 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
+  Pressable,
+  TextInputProps,
   KeyboardAvoidingView,
   Platform,
   ScrollView
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CustomButton from '../components/CustomButton';
 import { THEME } from '../theme';
 import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../services/supabase';
@@ -19,6 +20,9 @@ import { useAuthStore } from '../store/authStore';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
+
+const GUTTER = THEME.spatial.screenPaddingHorizontal;
+const GRID = THEME.spatial.gridUnit;
 
 export default function AuthScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -194,169 +198,145 @@ export default function AuthScreen({ route, navigation }: Props) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: Math.max(insets.top + 8, 16),
-            paddingBottom: Math.max(insets.bottom + 16, 32)
-          }
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Figma Top Nav Bar (SCR-02) */}
-        <View style={styles.topNav}>
-          <TouchableOpacity
-            style={styles.navCircleBtn}
-            onPress={() => {
-              if (navigation.canGoBack()) navigation.goBack();
-              else navigation.replace('MainTabs', undefined);
-            }}
-          >
-            <Text style={styles.navBackIcon}>‹</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.navTitle}>
-            {isSignUp ? 'Daftar Akun' : 'Masuk Akun'}
-          </Text>
-
-          <View style={styles.brandBadge}>
-            <Text style={styles.brandBadgeText}>MABAR</Text>
+    <View style={styles.screen}>
+      <AuthBackdrop />
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: Math.max(insets.top, 12),
+              paddingBottom: Math.max(insets.bottom, GRID * 3),
+              paddingLeft: Math.max(insets.left, GUTTER),
+              paddingRight: Math.max(insets.right, GUTTER)
+            }
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topNav}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Kembali"
+              style={({ pressed }) => [styles.navButton, pressed && styles.pressed]}
+              onPress={() => {
+                if (navigation.canGoBack()) navigation.goBack();
+                else navigation.replace('MainTabs', undefined);
+              }}
+            >
+              <View style={styles.chevron} />
+            </Pressable>
+            <View style={styles.brand} accessible accessibilityLabel="MainBareng">
+              <View style={styles.brandMark}>
+                <Text style={styles.brandInitial}>M</Text>
+              </View>
+              <Text style={styles.brandName} numberOfLines={1}>MainBareng</Text>
+            </View>
+            <View style={styles.navSpacer} aria-hidden />
           </View>
-        </View>
 
-        {/* Figma Header Text */}
-        <View style={styles.headerBox}>
-          <Text style={styles.mainTitle}>
-            {isSignUp ? 'Mulai Main Bareng' : 'Selamat Datang Kembali'}
-          </Text>
-          <Text style={styles.subtitle}>
-            {isSignUp
-              ? 'Buat akun untuk cari teman main olahraga dan esports di sekitarmu.'
-              : 'Masuk untuk menemukan dan bergabung ke sesi mabar terdekat.'}
-          </Text>
-        </View>
+          <View style={styles.authBody}>
+            <Text accessibilityRole="header" style={styles.mainTitle}>
+              {isSignUp ? 'Buat akun MainBareng' : 'Masuk ke MainBareng'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isSignUp
+                ? 'Buat akun dan temukan teman main di dekatmu.'
+                : 'Masuk untuk menemukan sesi main di dekatmu.'}
+            </Text>
 
-        {/* Form Fields */}
-        <View style={styles.formContainer}>
-          {isSignUp && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>NAMA LENGKAP</Text>
-              <View style={styles.inputBox}>
-                <Text style={styles.inputPrefixIcon}>👤</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Contoh: Jeremy Marvel"
-                  placeholderTextColor={THEME.colors.textMuted}
+            <View style={styles.form}>
+              {isSignUp && (
+                <AuthField
+                  label="Nama lengkap"
+                  placeholder="Nama kamu"
                   autoCapitalize="words"
+                  autoComplete="name"
                   value={fullName}
                   onChangeText={setFullName}
                   editable={!loading}
                 />
-              </View>
-            </View>
-          )}
+              )}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>EMAIL</Text>
-            <View style={styles.inputBox}>
-              <Text style={styles.inputPrefixIcon}>✉</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="nama@email.com"
-                placeholderTextColor={THEME.colors.textMuted}
+              <AuthField
+                label="Email"
+                placeholder="nama@example.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="email"
                 value={email}
                 onChangeText={setEmail}
                 editable={!loading}
               />
-            </View>
-          </View>
 
-          <View style={styles.inputGroup}>
-            <View style={styles.labelRow}>
-              <Text style={styles.inputLabel}>KATA SANDI</Text>
-              {!isSignUp && (
-                <TouchableOpacity
-                  onPress={() =>
-                    showAlert('Reset Kata Sandi', 'Fitur reset kata sandi via email segera hadir di pembaruan berikutnya.', 'info')
-                  }
-                >
-                  <Text style={styles.forgotPasswordText}>Lupa Kata Sandi?</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={styles.inputBox}>
-              <Text style={styles.inputPrefixIcon}>🔒</Text>
-              <TextInput
-                style={styles.inputField}
+              <AuthField
+                label="Kata sandi"
                 placeholder="Minimal 6 karakter"
-                placeholderTextColor={THEME.colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
                 editable={!loading}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword((prev) => !prev)}
-                style={styles.eyeBtn}
+                labelAction={!isSignUp && (
+                  <Pressable
+                    accessibilityRole="button"
+                    hitSlop={GRID}
+                    onPress={() =>
+                      showAlert('Reset Kata Sandi', 'Fitur reset kata sandi via email segera hadir di pembaruan berikutnya.', 'info')
+                    }
+                    style={({ pressed }) => pressed && styles.pressed}
+                  >
+                    <Text style={styles.forgotLink}>Lupa kata sandi?</Text>
+                  </Pressable>
+                )}
               >
-                <Text style={styles.eyeIcon}>{showPassword ? '👁' : '👁‍🗨'}</Text>
-              </TouchableOpacity>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'}
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  style={({ pressed }) => [styles.revealButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.revealLabel}>{showPassword ? 'Sembunyikan' : 'Lihat'}</Text>
+                </Pressable>
+              </AuthField>
+
+              <CustomButton
+                label={isSignUp && cooldown > 0 ? `Tunggu (${cooldown}s)` : isSignUp ? 'Buat akun' : 'Masuk'}
+                onPress={handleAuth}
+                loading={loading}
+                disabled={isSignUp && cooldown > 0}
+                style={styles.submit}
+              />
             </View>
-          </View>
 
-          {/* Primary CTA Button */}
-          <TouchableOpacity
-            style={[
-              styles.btnPrimary,
-              (loading || (isSignUp && cooldown > 0)) && styles.btnDisabled
-            ]}
-            onPress={handleAuth}
-            disabled={loading || (isSignUp && cooldown > 0)}
-          >
-            {loading ? (
-              <ActivityIndicator color={THEME.colors.textOnPrimary} size="small" />
-            ) : (
-              <Text style={styles.btnPrimaryText}>
-                {isSignUp
-                  ? cooldown > 0
-                    ? `Tunggu (${cooldown}s)`
-                    : 'Daftar Akun Baru'
-                  : 'Masuk Akun Sekarang'}
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>
+                {isSignUp ? 'Sudah punya akun?' : 'Belum punya akun?'}
               </Text>
-            )}
-          </TouchableOpacity>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setIsSignUp((prev) => !prev)}
+                disabled={loading}
+                style={({ pressed }) => [
+                  styles.switchButton,
+                  pressed && styles.pressed,
+                  loading && styles.disabled
+                ]}
+              >
+                <Text style={styles.switchLabel}>{isSignUp ? 'Masuk' : 'Buat akun'}</Text>
+              </Pressable>
+            </View>
 
-          {/* Footer Switcher */}
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>
-              {isSignUp ? 'Sudah punya akun Mabar?' : 'Belum punya akun Mabar?'}
+            <Text style={styles.legalText}>
+              Dengan masuk atau mendaftar, kamu telah menyetujui Ketentuan Layanan dan Kebijakan Privasi
+              Mabar (MainBareng).
             </Text>
-            <TouchableOpacity
-              onPress={() => setIsSignUp((prev) => !prev)}
-              disabled={loading}
-            >
-              <Text style={styles.footerLink}>
-                {isSignUp ? 'Masuk di Sini' : 'Daftar Akun Baru'}
-              </Text>
-            </TouchableOpacity>
           </View>
-
-          {/* Legal Disclaimer */}
-          <Text style={styles.legalText}>
-            Dengan masuk atau mendaftar, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi
-            Mabar (MainBareng).
-          </Text>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <CustomAlertModal
         visible={modalConfig.visible}
@@ -370,193 +350,356 @@ export default function AuthScreen({ route, navigation }: Props) {
         }
         onClose={() => setModalConfig((prev) => ({ ...prev, visible: false }))}
       />
-    </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+function AuthField({
+  label,
+  labelAction,
+  children,
+  ...inputProps
+}: TextInputProps & { label: string; labelAction?: React.ReactNode; children?: React.ReactNode }) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View style={styles.field}>
+      <View style={styles.labelRow}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        {labelAction}
+      </View>
+      <View style={[styles.inputBox, focused && styles.inputBoxFocused]}>
+        <TextInput
+          {...inputProps}
+          accessibilityLabel={label}
+          style={styles.input}
+          placeholderTextColor={THEME.colors.textMuted}
+          selectionColor={THEME.colors.primary}
+          cursorColor={THEME.colors.primary}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function AuthBackdrop() {
+  return (
+    <View
+      style={styles.backdrop}
+      pointerEvents="none"
+      aria-hidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <View style={[styles.outline, styles.court]}>
+        <View style={styles.courtLine} />
+        <View style={[styles.outline, styles.courtCircle]} />
+      </View>
+      <View style={[styles.outline, styles.controller]}>
+        <View style={styles.directionPad}>
+          <View style={[styles.solid, styles.horizontalDirection]} />
+          <View style={[styles.solid, styles.verticalDirection]} />
+        </View>
+        <View style={styles.controllerButtons}>
+          {[0, 1, 2, 3].map((index) => (
+            <View key={index} style={[styles.solid, styles.controllerButton]} />
+          ))}
+        </View>
+      </View>
+      <View style={[styles.outline, styles.racket]}>
+        <View style={styles.racketStrings}>
+          {[0, 1, 2].map((index) => (
+            <View key={index} style={[styles.solid, styles.racketString]} />
+          ))}
+        </View>
+        <View style={[styles.racketStrings, styles.horizontalStrings]}>
+          {[0, 1, 2, 3].map((index) => (
+            <View key={index} style={[styles.solid, styles.racketString]} />
+          ))}
+        </View>
+        <View style={[styles.outline, styles.racketHandle]} />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1 },
+  screen: {
     flex: 1,
     backgroundColor: THEME.colors.background
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 32
+    alignItems: 'center'
   },
   topNav: {
-    height: 52,
+    minHeight: THEME.components.buttonPrimary.height,
+    width: '100%',
+    maxWidth: 1168,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16
+    marginTop: 17
   },
-  navCircleBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+  navButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    justifyContent: 'center'
-  },
-  navBackIcon: {
-    fontSize: 24,
-    color: THEME.colors.text,
-    includeFontPadding: false,
-    textAlign: 'center',
-    lineHeight: 28,
-    marginTop: -2
-  },
-  navTitle: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 16,
-    color: THEME.colors.text,
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
-  brandBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    backgroundColor: THEME.colors.primaryMuted,
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: THEME.colors.primary,
+    borderRadius: THEME.radius.md,
+    borderColor: THEME.colors.borderStrong,
+    backgroundColor: THEME.colors.card
+  },
+  navSpacer: { width: 44 },
+  chevron: {
+    width: 10,
+    height: 10,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: THEME.colors.text,
+    transform: [{ translateX: 2 }, { rotate: '45deg' }]
+  },
+  brand: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'center'
+    gap: GRID,
+    paddingHorizontal: GRID
   },
-  brandBadgeText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.primary,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    letterSpacing: 0.5
+  brandMark: {
+    width: 30,
+    height: 30,
+    borderRadius: THEME.radius.sm,
+    borderTopRightRadius: THEME.radius.xs,
+    borderBottomLeftRadius: THEME.radius.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.colors.primary
   },
-  headerBox: {
-    marginBottom: 20
+  brandInitial: {
+    ...THEME.typography.h3,
+    color: THEME.colors.textOnPrimary
+  },
+  brandName: {
+    ...THEME.typography.cardTitle,
+    flexShrink: 1,
+    fontFamily: THEME.typography.fonts.extraBold,
+    letterSpacing: -0.6,
+    color: THEME.colors.text
+  },
+  authBody: {
+    width: '100%',
+    maxWidth: 464,
+    marginTop: GRID * 7.5
   },
   mainTitle: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 22,
-    color: THEME.colors.text,
-    includeFontPadding: false,
-    lineHeight: 28,
-    marginBottom: 6
+    ...THEME.typography.h1,
+    color: THEME.colors.text
   },
   subtitle: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 12,
+    ...THEME.typography.body,
+    fontSize: 16,
+    lineHeight: 24,
     color: THEME.colors.textSecondary,
-    includeFontPadding: false,
-    lineHeight: 18
+    marginTop: GRID,
+    marginBottom: GRID * 2.5
   },
-  formContainer: {
-    gap: 16
-  },
-  inputGroup: {
-    gap: 6
-  },
+  form: { gap: GRID * 1.75 },
+  field: { gap: GRID * 0.625 },
   labelRow: {
+    minHeight: 20,
     flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    columnGap: GRID
   },
   inputLabel: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false,
-    letterSpacing: 0.5
-  },
-  forgotPasswordText: {
-    fontFamily: THEME.typography.fonts.medium,
-    fontSize: 11,
-    color: THEME.colors.accent,
-    includeFontPadding: false
+    ...THEME.typography.button,
+    letterSpacing: 0,
+    color: THEME.colors.text
   },
   inputBox: {
-    height: 46,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14
+    borderWidth: 1,
+    borderRadius: THEME.radius.md,
+    borderColor: THEME.colors.borderStrong,
+    backgroundColor: THEME.colors.cardElevated
   },
-  inputPrefixIcon: {
-    fontSize: 14,
-    color: THEME.colors.textSecondary,
-    marginRight: 10,
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
-  inputField: {
+  inputBoxFocused: { borderColor: THEME.colors.borderActive },
+  input: {
+    ...THEME.typography.body,
     flex: 1,
-    height: '100%',
-    fontFamily: THEME.typography.fonts.regular,
+    minWidth: 0,
+    minHeight: THEME.components.buttonPrimary.height,
+    fontSize: 16,
+    lineHeight: 22,
+    paddingHorizontal: GRID * 1.5,
+    paddingVertical: GRID,
+    color: THEME.colors.text
+  },
+  revealButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderRadius: THEME.radius.md,
+    paddingHorizontal: GRID * 1.5,
+    marginRight: 2
+  },
+  revealLabel: {
+    ...THEME.typography.button,
     fontSize: 13,
-    color: THEME.colors.text,
-    paddingVertical: 0,
-    includeFontPadding: false,
-    textAlignVertical: 'center'
+    letterSpacing: 0,
+    color: THEME.colors.textSecondary
   },
-  eyeBtn: {
-    padding: 6,
-    justifyContent: 'center',
-    alignItems: 'center'
+  forgotLink: {
+    ...THEME.typography.bodySmall,
+    color: THEME.colors.primary
   },
-  eyeIcon: {
-    fontSize: 15,
-    color: THEME.colors.textMuted,
-    includeFontPadding: false
+  submit: { marginTop: GRID / 2 },
+  pressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }]
   },
-  btnPrimary: {
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6
-  },
-  btnDisabled: {
-    opacity: 0.6
-  },
-  btnPrimaryText: {
-    fontFamily: THEME.typography.fonts.bold,
-    fontSize: 14,
-    color: THEME.colors.textOnPrimary,
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
+  disabled: { opacity: 0.5 },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8
+    flexWrap: 'wrap',
+    columnGap: GRID / 2,
+    marginTop: GRID * 1.5
   },
   footerText: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 12,
-    color: THEME.colors.textSecondary,
-    includeFontPadding: false
+    ...THEME.typography.body,
+    fontSize: 14,
+    color: THEME.colors.textSecondary
   },
-  footerLink: {
-    fontFamily: THEME.typography.fonts.semiBold,
-    fontSize: 12,
-    color: THEME.colors.accent,
-    includeFontPadding: false
+  switchButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: GRID / 2
+  },
+  switchLabel: {
+    ...THEME.typography.button,
+    letterSpacing: 0,
+    color: THEME.colors.primary
   },
   legalText: {
-    fontFamily: THEME.typography.fonts.regular,
-    fontSize: 10,
+    ...THEME.typography.bodySmall,
     color: THEME.colors.textMuted,
-    lineHeight: 15,
     textAlign: 'center',
-    marginTop: 14,
-    includeFontPadding: false
+    marginTop: GRID / 2,
+    paddingHorizontal: GRID
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+    overflow: 'hidden',
+    opacity: 0.24
+  },
+  outline: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: THEME.colors.textMuted
+  },
+  solid: { backgroundColor: THEME.colors.textMuted },
+  court: {
+    top: '8%',
+    right: -35,
+    width: '46%',
+    minWidth: 180,
+    maxWidth: 355,
+    aspectRatio: 5 / 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: THEME.radius.md,
+    transform: [{ rotate: '-23deg' }]
+  },
+  courtLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: THEME.colors.textMuted
+  },
+  courtCircle: {
+    width: '32%',
+    aspectRatio: 1,
+    borderRadius: THEME.radius.full
+  },
+  controller: {
+    left: -20,
+    bottom: '8%',
+    width: '39%',
+    minWidth: 144,
+    maxWidth: 260,
+    aspectRatio: 2,
+    borderRadius: 40,
+    transform: [{ rotate: '-19deg' }]
+  },
+  directionPad: {
+    position: 'absolute',
+    left: '20%',
+    top: '31%',
+    width: 25,
+    height: 25,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  horizontalDirection: { position: 'absolute', width: 25, height: 7 },
+  verticalDirection: { position: 'absolute', width: 7, height: 25 },
+  controllerButtons: {
+    position: 'absolute',
+    left: '69%',
+    top: '38%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: 23,
+    gap: 4,
+    transform: [{ rotate: '45deg' }]
+  },
+  controllerButton: {
+    width: 9,
+    height: 9,
+    borderRadius: THEME.radius.full
+  },
+  racket: {
+    right: '5%',
+    bottom: '13%',
+    width: '17%',
+    minWidth: 64,
+    maxWidth: 116,
+    aspectRatio: 3 / 4,
+    borderRadius: THEME.radius.full,
+    transform: [{ rotate: '33deg' }]
+  },
+  racketStrings: {
+    position: 'absolute',
+    top: '17%',
+    bottom: '17%',
+    left: '20%',
+    right: '20%',
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    opacity: 0.6
+  },
+  horizontalStrings: {
+    top: '25%',
+    bottom: '25%',
+    left: '16%',
+    right: '16%',
+    flexDirection: 'column'
+  },
+  racketString: { minWidth: 1, minHeight: 1 },
+  racketHandle: {
+    top: '100%',
+    alignSelf: 'center',
+    width: GRID,
+    height: '52%',
+    borderRadius: THEME.radius.xs
   }
 });

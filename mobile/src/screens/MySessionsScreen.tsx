@@ -202,9 +202,9 @@ function formatShortPrice(totalCost: number | null | undefined, slots: number): 
   if (!totalCost || totalCost <= 0) return 'Gratis';
   const perPerson = Math.round(totalCost / Math.max(slots, 1));
   if (perPerson >= 1000) {
-    return `Rp ${Math.round(perPerson / 1000)}k`;
+    return `IDR ${Math.round(perPerson / 1000)}k`;
   }
-  return `Rp ${perPerson}`;
+  return `IDR ${perPerson}`;
 }
 
 // --- MONOCHROME VECTOR ICONS ---

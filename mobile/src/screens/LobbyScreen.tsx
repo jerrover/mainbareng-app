@@ -530,7 +530,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
     const matchTitle = currentSession?.title || routeSessionTitle || 'Sesi Mabar';
     const costLabel =
       venueTotalCost > 0
-        ? `Est. Patungan Rp ${fullTargetCostPerPlayer.toLocaleString('id-ID')} / org`
+        ? `Est. Patungan IDR ${fullTargetCostPerPlayer.toLocaleString('id-ID')} / org`
         : 'Gratis';
 
     showConfirm({
