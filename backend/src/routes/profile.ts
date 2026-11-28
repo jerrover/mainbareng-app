@@ -169,6 +169,11 @@ profileRouter.post('/activities', async (c) => {
     const resolvedLevel = validLevels.includes(skill_rating_level)
       ? skill_rating_level
       : 'Beginner';
+    const defaultPointsByLevel: Record<string, number> = {
+      Beginner: 1000,
+      Intermediate: 1200,
+      Advanced: 1500
+    };
 
     const payload = {
       user_id: user.id,
@@ -177,7 +182,10 @@ profileRouter.post('/activities', async (c) => {
       game_id_tag: game_id_tag?.trim() || null,
       preferred_role: preferred_role?.trim() || null,
       skill_rating_level: resolvedLevel,
-      skill_rating_points: typeof skill_rating_points === 'number' ? skill_rating_points : 1200,
+      skill_rating_points:
+        typeof skill_rating_points === 'number'
+          ? skill_rating_points
+          : defaultPointsByLevel[resolvedLevel] ?? 1200,
       updated_at: new Date().toISOString()
     };
 
@@ -195,6 +203,44 @@ profileRouter.post('/activities', async (c) => {
       {
         success: false,
         message: 'Gagal menyimpan sub-profil aktivitas',
+        error: err.message
+      },
+      500
+    );
+  }
+});
+
+// DELETE /api/profile/activities/:activityType - Remove a sport/esport activity profile
+profileRouter.delete('/activities/:activityType', async (c) => {
+  const user = c.get('user');
+  const rawType = c.req.param('activityType');
+  const normalizedActivity = rawType?.toLowerCase().trim();
+
+  if (!normalizedActivity) {
+    return c.json(
+      {
+        success: false,
+        message: 'Parameter activityType wajib diisi.'
+      },
+      400
+    );
+  }
+
+  try {
+    const { error } = await supabase
+      .from('user_activity_profiles')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('activity_type', normalizedActivity);
+
+    if (error) throw error;
+
+    return c.json({ success: true, deleted: normalizedActivity });
+  } catch (err: any) {
+    return c.json(
+      {
+        success: false,
+        message: 'Gagal menghapus sub-profil aktivitas',
         error: err.message
       },
       500
@@ -221,6 +267,33 @@ profileRouter.get('/me/credit-history', async (c) => {
       {
         success: false,
         message: 'Gagal mengambil riwayat Credit Score',
+        error: err.message
+      },
+      500
+    );
+  }
+});
+
+// GET /api/profile/me/reviews - Get anonymous peer review feedback received by current user
+profileRouter.get('/me/reviews', async (c) => {
+  const user = c.get('user');
+
+  try {
+    const { data, error } = await supabase
+      .from('peer_reviews')
+      .select('id, session_id, attendance, sportsmanship, level_fit, notes, created_at')
+      .eq('target_user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    return c.json({ success: true, reviews: data || [] });
+  } catch (err: any) {
+    return c.json(
+      {
+        success: false,
+        message: 'Gagal mengambil ulasan teman',
         error: err.message
       },
       500

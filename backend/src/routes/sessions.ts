@@ -427,19 +427,26 @@ async function recalculateParticipantsMetricsForSession(sessionId: string): Prom
 }
 
 // GET /api/sessions/:id/review-targets?reviewer_id=... - Daftar target review pasca-sesi (FR-09)
-sessionRouter.get('/:id/review-targets', async (c) => {
+sessionRouter.get('/:id/review-targets', authMiddleware, async (c) => {
+  const authUser = c.get('user');
   const paramParse = sessionUuidParamSchema.safeParse({ id: c.req.param('id') });
   if (!paramParse.success) {
     return c.json({ success: false, error: paramParse.error.issues[0]?.message || 'Invalid session id' }, 400);
   }
 
-  const queryParse = reviewTargetsQuerySchema.safeParse({ reviewer_id: c.req.query('reviewer_id') });
-  if (!queryParse.success) {
-    return c.json({ success: false, error: queryParse.error.issues[0]?.message || 'Query reviewer_id wajib valid UUID' }, 400);
+  const queryReviewerId = c.req.query('reviewer_id');
+  if (queryReviewerId !== undefined) {
+    const queryParse = reviewTargetsQuerySchema.safeParse({ reviewer_id: queryReviewerId });
+    if (!queryParse.success) {
+      return c.json({ success: false, error: queryParse.error.issues[0]?.message || 'Query reviewer_id wajib valid UUID' }, 400);
+    }
+    if (queryParse.data.reviewer_id !== authUser.id) {
+      return c.json({ success: false, error: 'Akses ditolak: reviewer_id tidak sesuai dengan akun login.' }, 403);
+    }
   }
 
   const sessionId = paramParse.data.id;
-  const reviewerId = queryParse.data.reviewer_id;
+  const reviewerId = authUser.id;
 
   try {
     const { data: session, error: sessionErr } = await supabase
@@ -490,8 +497,18 @@ sessionRouter.get('/:id/review-targets', async (c) => {
       );
     }
 
+    const { data: existingReviews } = await supabase
+      .from('peer_reviews')
+      .select('target_user_id')
+      .eq('session_id', sessionId)
+      .eq('reviewer_id', reviewerId);
+
+    const reviewedUserIds = new Set(
+      (existingReviews || []).map((r: any) => r.target_user_id).filter(Boolean)
+    );
+
     const targets: ReviewTargetItem[] = activeParticipants
-      .filter((p: any) => p.user_id !== reviewerId)
+      .filter((p: any) => p.user_id !== reviewerId && !reviewedUserIds.has(p.user_id))
       .map((p: any) => {
         const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
         return {
@@ -509,7 +526,8 @@ sessionRouter.get('/:id/review-targets', async (c) => {
 });
 
 // POST /api/sessions/:id/reviews - Submit batch peer reviews & mutasi Credit Score atomik (FR-09, FR-10)
-sessionRouter.post('/:id/reviews', async (c) => {
+sessionRouter.post('/:id/reviews', authMiddleware, async (c) => {
+  const authUser = c.get('user');
   const paramParse = sessionUuidParamSchema.safeParse({ id: c.req.param('id') });
   if (!paramParse.success) {
     return c.json({ success: false, error: paramParse.error.issues[0]?.message || 'Invalid session id' }, 400);
@@ -535,6 +553,15 @@ sessionRouter.post('/:id/reviews', async (c) => {
 
   const sessionId = paramParse.data.id;
   const { reviewer_id, reviews } = bodyParse.data;
+  if (reviewer_id !== authUser.id) {
+    return c.json(
+      {
+        success: false,
+        error: 'Akses ditolak: reviewer_id tidak sesuai dengan akun yang sedang login.'
+      },
+      403
+    );
+  }
 
   // Pastikan setiap item non-guest sesuai rule mapping CREDIT_SCORE_RULES
   for (const item of reviews) {
@@ -593,7 +620,8 @@ sessionRouter.post('/:id/reviews', async (c) => {
 });
 
 // PATCH /api/sessions/:id/status - Update status sesi oleh host + hitung ulang metrik saat COMPLETED
-sessionRouter.patch('/:id/status', async (c) => {
+sessionRouter.patch('/:id/status', authMiddleware, async (c) => {
+  const authUser = c.get('user');
   const paramParse = sessionUuidParamSchema.safeParse({ id: c.req.param('id') });
   if (!paramParse.success) {
     return c.json({ success: false, error: paramParse.error.issues[0]?.message || 'Invalid session id' }, 400);
@@ -620,10 +648,20 @@ sessionRouter.patch('/:id/status', async (c) => {
   const sessionId = paramParse.data.id;
   const { host_id, status: nextStatus } = bodyParse.data;
 
+  if (host_id !== authUser.id) {
+    return c.json(
+      {
+        success: false,
+        error: 'Akses ditolak: host_id tidak sesuai dengan akun yang sedang login.'
+      },
+      403
+    );
+  }
+
   try {
     const { data: session, error: sessionErr } = await supabase
       .from('sessions')
-      .select('id, host_id, status')
+      .select('id, host_id, status, start_time')
       .eq('id', sessionId)
       .maybeSingle();
 
@@ -653,6 +691,20 @@ sessionRouter.patch('/:id/status', async (c) => {
         {
           success: false,
           error: `Transisi status dari ${currentStatus} ke ${nextStatus} tidak diizinkan.`
+        },
+        400
+      );
+    }
+
+    if (
+      nextStatus === 'COMPLETED' &&
+      session.start_time &&
+      new Date(session.start_time).getTime() > Date.now()
+    ) {
+      return c.json(
+        {
+          success: false,
+          error: 'Sesi belum dimulai. Hanya sesi yang sudah melewati waktu kickoff yang dapat diselesaikan.'
         },
         400
       );

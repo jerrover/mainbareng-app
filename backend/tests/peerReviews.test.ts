@@ -51,6 +51,10 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: REVIEWER_ID, email: 'reviewer@example.com' } },
+      error: null
+    });
   });
 
   // ============================================================================
@@ -90,7 +94,8 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
       });
 
       const res = await app.request(
-        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`
+        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`,
+        { headers: { Authorization: 'Bearer valid-jwt-token' } }
       );
 
       expect(res.status).toBe(200);
@@ -106,6 +111,66 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
       ]);
     });
 
+    it('should exclude targets already reviewed by the reviewer', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'sessions') {
+          return createQueryBuilder({ data: { id: SESSION_ID, status: 'COMPLETED' }, error: null });
+        }
+        if (table === 'session_participants') {
+          return createQueryBuilder({
+            data: [
+              {
+                id: PART_REVIEWER_ID,
+                user_id: REVIEWER_ID,
+                assigned_team: 'Team A',
+                attendance_status: 'CONFIRMED',
+                profiles: { id: REVIEWER_ID, full_name: 'Jerikho' }
+              },
+              {
+                id: PART_TARGET_ID,
+                user_id: TARGET_USER_ID,
+                assigned_team: 'Team B',
+                attendance_status: 'CONFIRMED',
+                profiles: { id: TARGET_USER_ID, full_name: 'Hyun' }
+              }
+            ],
+            error: null
+          });
+        }
+        if (table === 'peer_reviews') {
+          return createQueryBuilder({
+            data: [{ target_user_id: TARGET_USER_ID }],
+            error: null
+          });
+        }
+        return createQueryBuilder({ data: [], error: null });
+      });
+
+      const res = await app.request(
+        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`,
+        { headers: { Authorization: 'Bearer valid-jwt-token' } }
+      );
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toEqual([]);
+    });
+
+    it('should return 401 when Authorization header is missing', async () => {
+      const res = await app.request(
+        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it('should return 403 when reviewer_id spoofs another user', async () => {
+      const res = await app.request(
+        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${HOST_ID}`,
+        { headers: { Authorization: 'Bearer valid-jwt-token' } }
+      );
+      expect(res.status).toBe(403);
+    });
+
     it('should return 400 when session status is not COMPLETED', async () => {
       mockFrom.mockImplementation((table: string) => {
         if (table === 'sessions') {
@@ -118,7 +183,8 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
       });
 
       const res = await app.request(
-        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`
+        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`,
+        { headers: { Authorization: 'Bearer valid-jwt-token' } }
       );
 
       expect(res.status).toBe(400);
@@ -153,13 +219,15 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
       });
 
       const res = await app.request(
-        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`
+        `/api/sessions/${SESSION_ID}/review-targets?reviewer_id=${REVIEWER_ID}`,
+        { headers: { Authorization: 'Bearer valid-jwt-token' } }
       );
 
       expect(res.status).toBe(403);
       const body = await res.json();
       expect(body.success).toBe(false);
     });
+
   });
 
   // ============================================================================
@@ -193,7 +261,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           reviewer_id: REVIEWER_ID,
           reviews: [
@@ -262,7 +330,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           reviewer_id: REVIEWER_ID,
           reviews: [
@@ -304,7 +372,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           reviewer_id: REVIEWER_ID,
           reviews: [
@@ -337,7 +405,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           reviewer_id: REVIEWER_ID,
           reviews: [
@@ -370,7 +438,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           reviewer_id: REVIEWER_ID,
           reviews: [
@@ -402,7 +470,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           reviewer_id: REVIEWER_ID,
           reviews: [
@@ -421,6 +489,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
       const body = await res.json();
       expect(body.success).toBe(false);
     });
+
 
     it('should ignore sportsmanship good bonus when attendance is no_show and enforce -25..+10 cumulative cap', () => {
       // no_show + good must ignore COMMENDED_SPORTSMANSHIP (+5)
@@ -517,6 +586,12 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
   // 4. PATCH /api/sessions/:id/status
   // ============================================================================
   describe('PATCH /api/sessions/:id/status', () => {
+    beforeEach(() => {
+      mockGetUser.mockResolvedValue({
+        data: { user: { id: HOST_ID, email: 'host@example.com' } },
+        error: null
+      });
+    });
     it('should allow valid non-COMPLETED transition OPEN -> LOCKED with 200', async () => {
       let sessionsCall = 0;
       mockFrom.mockImplementation((table: string) => {
@@ -538,7 +613,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           host_id: HOST_ID,
           status: 'LOCKED'
@@ -602,7 +677,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           host_id: HOST_ID,
           status: 'COMPLETED'
@@ -625,7 +700,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
     it('should reject forbidden status transition with 400 (COMPLETED -> OPEN and backward transition)', async () => {
       const openRes = await app.request(`/api/sessions/${SESSION_ID}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           host_id: HOST_ID,
           status: 'OPEN'
@@ -645,7 +720,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           host_id: HOST_ID,
           status: 'LOCKED'
@@ -670,7 +745,7 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
 
       const res = await app.request(`/api/sessions/${SESSION_ID}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
         body: JSON.stringify({
           host_id: REVIEWER_ID,
           status: 'LOCKED'
@@ -678,6 +753,36 @@ describe('Wave 4: Peer Reviews, Credit Mutation, Credit History & Session Status
       });
 
       expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+    });
+
+    it('should reject COMPLETED transition before kickoff start_time with 400', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'sessions') {
+          return createQueryBuilder({
+            data: {
+              id: SESSION_ID,
+              host_id: HOST_ID,
+              status: 'OPEN',
+              start_time: new Date(Date.now() + 3600 * 1000).toISOString()
+            },
+            error: null
+          });
+        }
+        return createQueryBuilder({ data: [], error: null });
+      });
+
+      const res = await app.request(`/api/sessions/${SESSION_ID}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-jwt-token' },
+        body: JSON.stringify({
+          host_id: HOST_ID,
+          status: 'COMPLETED'
+        })
+      });
+
+      expect(res.status).toBe(400);
       const body = await res.json();
       expect(body.success).toBe(false);
     });

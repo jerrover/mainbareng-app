@@ -94,6 +94,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const [isLeaving, setIsLeaving] = useState<boolean>(false);
   const [isCancellingSession, setIsCancellingSession] = useState<boolean>(false);
+  const [isCompletingSession, setIsCompletingSession] = useState<boolean>(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
 
   // Wave 4: Rating & Sportivitas pasca-sesi
@@ -101,6 +102,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
   const [reviewTargets, setReviewTargets] = useState<ApiReviewTarget[]>([]);
   const [isLoadingTargets, setIsLoadingTargets] = useState<boolean>(false);
   const [isSubmittingReviews, setIsSubmittingReviews] = useState<boolean>(false);
+  const [hasCompletedReview, setHasCompletedReview] = useState<boolean>(false);
 
   const [activeTeamTab, setActiveTeamTab] = useState<'all' | 'A' | 'B'>('all');
 
@@ -634,6 +636,52 @@ export default function LobbyScreen({ route, navigation }: Props) {
     });
   };
 
+  // 3d. Action: Complete Session (Host Only -> opens post-match peer review)
+  const hasMatchStarted = useMemo(() => {
+    if (!currentSession) return false;
+    if (currentSession.status === 'IN_PROGRESS') return true;
+    if (!currentSession.start_time) return false;
+    return Date.now() >= new Date(currentSession.start_time).getTime();
+  }, [currentSession]);
+
+  const handleCompleteSession = () => {
+    if (!isHostUser) {
+      showAlert('warning', 'Akses Ditolak', 'Hanya Host yang berhak menyelesaikan sesi mabar.');
+      return;
+    }
+    if (!hasMatchStarted) {
+      showAlert('warning', 'Sesi Belum Dimulai', 'Sesi baru bisa diselesaikan setelah waktu kickoff dimulai.');
+      return;
+    }
+
+    showConfirm({
+      type: 'info',
+      title: 'Selesaikan Sesi Mabar?',
+      message: 'Sesi akan ditandai selesai (COMPLETED) dan seluruh peserta bisa langsung saling memberi rating & Credit Score.',
+      primaryButtonText: 'Ya, Selesaikan Sesi',
+      secondaryButtonText: 'Belum Selesai',
+      onConfirm: async () => {
+        closeAlert();
+        if (!user || !currentSession?.id) return;
+
+        setIsCompletingSession(true);
+        try {
+          await api.updateSessionStatus(currentSession.id, user.id, 'COMPLETED');
+          showAlert(
+            'success',
+            'Sesi Selesai',
+            'Match ditandai selesai. Kamu dan peserta lain sekarang bisa mengisi rating.'
+          );
+          await loadSessionAndRoster(false);
+        } catch (err: any) {
+          showAlert('error', 'Gagal Menyelesaikan Sesi', err.message || 'Terjadi kesalahan server.');
+        } finally {
+          setIsCompletingSession(false);
+        }
+      }
+    });
+  };
+
   // 4. Action: Bagikan Tautan Undangan
   const handleShareInvite = async () => {
     const sessionName = currentSession?.title || routeSessionTitle || 'Sesi Mabar';
@@ -669,13 +717,41 @@ export default function LobbyScreen({ route, navigation }: Props) {
     return currentSession?.status === 'COMPLETED' && !!user?.id && hasJoined;
   }, [currentSession?.status, user?.id, hasJoined]);
 
+  useEffect(() => {
+    let active = true;
+    if (!canReview || !currentSession?.id || !user?.id || participants.length <= 1) {
+      setHasCompletedReview(false);
+      return;
+    }
+
+    api
+      .getReviewTargets(currentSession.id, user.id)
+      .then((targets) => {
+        if (active) {
+          setHasCompletedReview(targets.length === 0);
+        }
+      })
+      .catch(() => {
+        // Silent check; handleOpenRating will surface errors if user taps CTA
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canReview, currentSession?.id, user?.id, participants.length]);
+
   const handleOpenRating = async () => {
-    if (!currentSession?.id || !user?.id) return;
+    if (!currentSession?.id || !user?.id || hasCompletedReview) return;
     setIsRatingVisible(true);
     setIsLoadingTargets(true);
     try {
       const targets = await api.getReviewTargets(currentSession.id, user.id);
       setReviewTargets(targets);
+      if (targets.length === 0) {
+        setHasCompletedReview(true);
+        setIsRatingVisible(false);
+        showAlert('info', 'Penilaian Selesai', 'Kamu sudah menilai semua peserta di sesi ini.');
+      }
     } catch (err: any) {
       setReviewTargets([]);
       showAlert(
@@ -695,6 +771,7 @@ export default function LobbyScreen({ route, navigation }: Props) {
       const result = await api.submitReviews(currentSession.id, user.id, reviews);
       setIsRatingVisible(false);
       setReviewTargets([]);
+      setHasCompletedReview(true);
       const rated = result?.submitted_count ?? reviews.length;
       showAlert(
         'success',
@@ -968,31 +1045,59 @@ export default function LobbyScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        {/* AI Team Balancer Button (Khusus Host & Sesi Aktif) */}
+        {/* Host Controls: Bagi Tim & Selesaikan Sesi */}
         {isHostUser && !isSessionCancelled && currentSession?.status !== 'COMPLETED' && (
-          <TouchableOpacity
-            style={[styles.balancerBtn, isSplitting && styles.btnDisabled]}
-            activeOpacity={0.8}
-            onPress={handleRunBalancer}
-            disabled={isSplitting}
-          >
-            {isSplitting ? (
-              <ActivityIndicator size="small" color={THEME.colors.primary} />
-            ) : (
-              <View style={styles.actionBtnInner}>
-                <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"
-                    stroke={THEME.colors.primary}
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-                <Text style={styles.balancerBtnText}>Bagi Tim Seimbang</Text>
-              </View>
+          <View style={styles.hostActionsStack}>
+            <TouchableOpacity
+              style={[styles.balancerBtn, isSplitting && styles.btnDisabled]}
+              activeOpacity={0.8}
+              onPress={handleRunBalancer}
+              disabled={isSplitting}
+            >
+              {isSplitting ? (
+                <ActivityIndicator size="small" color={THEME.colors.primary} />
+              ) : (
+                <View style={styles.actionBtnInner}>
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"
+                      stroke={THEME.colors.primary}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                  <Text style={styles.balancerBtnText}>Bagi Tim Seimbang</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {hasMatchStarted && (
+              <TouchableOpacity
+                style={[styles.completeSessionBtn, isCompletingSession && styles.btnDisabled]}
+                activeOpacity={0.8}
+                onPress={handleCompleteSession}
+                disabled={isCompletingSession}
+              >
+                {isCompletingSession ? (
+                  <ActivityIndicator size="small" color={THEME.colors.success} />
+                ) : (
+                  <View style={styles.actionBtnInner}>
+                    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                      <Path
+                        d="M20 6L9 17l-5-5"
+                        stroke={THEME.colors.success}
+                        strokeWidth={2.2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                    <Text style={styles.completeSessionBtnText}>Selesaikan Sesi & Buka Rating</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
         )}
 
         {/* Action Footer: Dipisah jadi 2 Blok (Blok 1: Status Terkonfirmasi, Blok 2: Aksi Batal Terpisah) */}
@@ -1016,11 +1121,14 @@ export default function LobbyScreen({ route, navigation }: Props) {
               </View>
             ) : canReview ? (
               <TouchableOpacity
-                style={styles.ratingCtaBtn}
+                style={[styles.ratingCtaBtn, hasCompletedReview && styles.ratingCtaBtnDone]}
                 activeOpacity={0.8}
                 onPress={handleOpenRating}
+                disabled={hasCompletedReview}
               >
-                <Text style={styles.ratingCtaText}>Beri Rating &amp; Sportivitas ⭐</Text>
+                <Text style={[styles.ratingCtaText, hasCompletedReview && styles.ratingCtaTextDone]}>
+                  {hasCompletedReview ? 'Penilaian Terkirim ✓' : 'Beri Rating & Sportivitas'}
+                </Text>
               </TouchableOpacity>
             ) : (
               <>
@@ -1403,6 +1511,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8
   },
+  hostActionsStack: {
+    gap: 10,
+    marginBottom: 10
+  },
   balancerBtn: {
     backgroundColor: 'rgba(213, 255, 64, 0.08)',
     borderWidth: 1,
@@ -1410,8 +1522,22 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     height: 46,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10
+    justifyContent: 'center'
+  },
+  completeSessionBtn: {
+    backgroundColor: THEME.colors.successSoft,
+    borderWidth: 1,
+    borderColor: THEME.colors.successBorder,
+    borderRadius: 14,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  completeSessionBtnText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 12.5,
+    color: THEME.colors.success,
+    includeFontPadding: false
   },
   balancerBtnText: {
     fontFamily: THEME.typography.fonts.bold,
@@ -1577,8 +1703,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.colors.accentBorder
   },
+  ratingCtaBtnDone: {
+    backgroundColor: THEME.colors.successSoft,
+    borderColor: THEME.colors.successBorder
+  },
   ratingCtaText: {
     ...THEME.typography.button,
     color: THEME.colors.text
+  },
+  ratingCtaTextDone: {
+    color: THEME.colors.success
   }
 });

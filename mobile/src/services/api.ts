@@ -32,6 +32,35 @@ export interface ApiOvrProfile {
   radar: ApiOvrRadarItem[];
 }
 
+export interface ApiCreditTransaction {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  delta: number;
+  reason: string;
+  balance_after: number | null;
+  created_at: string;
+}
+
+export interface ApiAnonymousReview {
+  id: string;
+  session_id: string;
+  attendance: ReviewAttendance;
+  sportsmanship: ReviewSportsmanship;
+  level_fit: ReviewLevelFit | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ApiActivityProfile {
+  activity_type: string;
+  in_game_name: string | null;
+  game_id_tag: string | null;
+  preferred_role: string | null;
+  skill_rating_level: 'Beginner' | 'Intermediate' | 'Advanced';
+  skill_rating_points: number;
+}
+
 export interface ApiVenue {
   id: string;
   name: string;
@@ -384,8 +413,13 @@ export const api = {
   },
 
   async getReviewTargets(sessionId: string, reviewerId: string): Promise<ApiReviewTarget[]> {
+    const authHeaders = await getAuthHeader();
     const query = new URLSearchParams({ reviewer_id: reviewerId });
-    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/review-targets?${query.toString()}`);
+    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/review-targets?${query.toString()}`, {
+      headers: {
+        ...authHeaders
+      }
+    });
     const json = await res.json();
     if (!res.ok || !json.success) {
       throw new Error(json.message || json.error || 'Gagal memuat daftar peserta yang bisa dinilai');
@@ -439,6 +473,101 @@ export const api = {
       return json.ovr_profile || null;
     } catch {
       return null;
+    }
+  },
+
+  async getCreditHistory(): Promise<ApiCreditTransaction[]> {
+    const authHeaders = await getAuthHeader();
+    const res = await fetch(`${BASE_URL}/api/profile/me/credit-history`, {
+      headers: authHeaders
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error || 'Gagal memuat riwayat Credit Score');
+    }
+    return json.transactions || [];
+  },
+
+  async getMyReviews(): Promise<ApiAnonymousReview[]> {
+    const authHeaders = await getAuthHeader();
+    const res = await fetch(`${BASE_URL}/api/profile/me/reviews`, {
+      headers: authHeaders
+    });
+    if (res.status === 404) {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('peer_reviews')
+        .select('id, session_id, attendance, sportsmanship, level_fit, notes, created_at')
+        .eq('target_user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw new Error(error.message);
+      return (data as ApiAnonymousReview[]) || [];
+    }
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error || 'Gagal memuat ulasan teman');
+    }
+    return json.reviews || [];
+  },
+
+  async upsertActivityProfile(payload: {
+    activity_type: string;
+    preferred_role?: string | null;
+    skill_rating_level: 'Beginner' | 'Intermediate' | 'Advanced';
+    in_game_name?: string | null;
+    game_id_tag?: string | null;
+  }): Promise<ApiActivityProfile> {
+    const authHeaders = await getAuthHeader();
+    const res = await fetch(`${BASE_URL}/api/profile/activities`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error || 'Gagal menyimpan profil cabang olahraga');
+    }
+    return json.activity;
+  },
+
+  async deleteActivityProfile(activityType: string): Promise<void> {
+    const normalized = activityType.toLowerCase().trim();
+    const authHeaders = await getAuthHeader();
+    const res = await fetch(
+      `${BASE_URL}/api/profile/activities/${encodeURIComponent(normalized)}`,
+      {
+        method: 'DELETE',
+        headers: authHeaders
+      }
+    );
+    if (res.status === 404) {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sesi login tidak ditemukan');
+      const { data: deletedRows, error } = await supabase
+        .from('user_activity_profiles')
+        .delete()
+        .match({ user_id: user.id, activity_type: normalized })
+        .select('id');
+      if (error) throw new Error(error.message);
+      if (!deletedRows || deletedRows.length === 0) {
+        throw new Error(
+          'Hapus cabor butuh policy DELETE di Supabase atau deploy endpoint backend DELETE /api/profile/activities.'
+        );
+      }
+      return;
+    }
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error || 'Gagal menghapus profil cabang olahraga');
     }
   }
 };

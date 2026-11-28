@@ -54,4 +54,16 @@ describe('Profile & Auth Middleware Integration Tests', () => {
     const res = await app.request('/api/profile/invalid-uuid/ovr');
     expect(res.status).toBe(401);
   });
+
+  it('should reject unauthenticated DELETE /api/profile/activities/:activityType with 401', async () => {
+    const res = await app.request('/api/profile/activities/futsal', {
+      method: 'DELETE'
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('should reject unauthenticated GET /api/profile/me/reviews with 401', async () => {
+    const res = await app.request('/api/profile/me/reviews');
+    expect(res.status).toBe(401);
+  });
 });

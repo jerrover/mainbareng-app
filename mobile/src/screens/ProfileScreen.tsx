@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  useWindowDimensions
+  useWindowDimensions,
+  Modal,
+  Pressable,
+  TextInput
 } from 'react-native';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Svg, { Circle, Line, Path, Polyline, Rect } from 'react-native-svg';
 import { THEME } from '../theme';
@@ -19,7 +22,7 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../services/supabase';
 import CustomAlertModal, { AlertType } from '../components/CustomAlertModal';
 import RadarChart from '../components/RadarChart';
-import { api, ApiOvrProfile } from '../services/api';
+import { api, ApiAnonymousReview, ApiCreditTransaction, ApiOvrProfile } from '../services/api';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Profile'>,
@@ -36,10 +39,61 @@ interface UserProfileData {
 
 interface ActivityItem {
   type: string;
+  rawType: string;
   role: string;
-  level: string;
+  level: 'Beginner' | 'Intermediate' | 'Advanced';
   rating: string;
-  matches: number;
+  inGameName: string | null;
+}
+
+const SPORT_OPTIONS = ['futsal', 'badminton', 'basket', 'mlbb'] as const;
+const LEVEL_OPTIONS: Array<'Beginner' | 'Intermediate' | 'Advanced'> = [
+  'Beginner',
+  'Intermediate',
+  'Advanced'
+];
+
+const ROLE_PRESETS: Record<string, string[]> = {
+  futsal: ['Pivot', 'Anchor', 'Flank', 'Kiper'],
+  badminton: ['Tunggal', 'Ganda Depan', 'Ganda Belakang'],
+  basket: ['Guard', 'Forward', 'Center'],
+  mlbb: ['Roamer', 'Jungler', 'Mid', 'Gold', 'EXP']
+};
+
+function formatCreditReason(reason: string): string {
+  switch (reason) {
+    case 'ATTEND_ON_TIME':
+      return 'Hadir Tepat Waktu';
+    case 'LATE_ARRIVAL':
+      return 'Terlambat Hadir';
+    case 'NO_SHOW':
+      return 'Tidak Hadir (No-Show)';
+    case 'GOOD_SPORTSMANSHIP':
+      return 'Sportif & Kooperatif';
+    case 'POOR_SPORTSMANSHIP':
+      return 'Kurang Sportif';
+    case 'HOST_CANCEL_LATE':
+      return 'Batal Mendadak';
+    default:
+      return reason.replace(/_/g, ' ');
+  }
+}
+
+function formatTxDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${d.getDate()} ${months[d.getMonth()]}, ${hh}:${mm}`;
+}
+
+function CloseIcon({ color, size = 15 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M18 6L6 18M6 6L18 18" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
 }
 
 function SettingsIcon({ color, size = 18 }: { color: string; size?: number }) {
@@ -98,6 +152,7 @@ function SportWatermark({ activityType = '' }: { activityType?: string }) {
 }
 
 export default function ProfileScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const radarWidth = Math.min(310, Math.max(250, screenWidth - 68));
   const { session, user, signOut } = useAuthStore();
@@ -105,6 +160,22 @@ export default function ProfileScreen({ navigation }: Props) {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [ovrProfile, setOvrProfile] = useState<ApiOvrProfile | null>(null);
+
+  // Credit History & Anonymous Reviews Bottom Sheet
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyTab, setHistoryTab] = useState<'credit' | 'reviews'>('credit');
+  const [creditHistory, setCreditHistory] = useState<ApiCreditTransaction[]>([]);
+  const [anonymousReviews, setAnonymousReviews] = useState<ApiAnonymousReview[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // Activity Profile Editor Bottom Sheet
+  const [isActivitySheetOpen, setIsActivitySheetOpen] = useState(false);
+  const [editSport, setEditSport] = useState<(typeof SPORT_OPTIONS)[number]>('futsal');
+  const [editLevel, setEditLevel] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Intermediate');
+  const [editRole, setEditRole] = useState('Pivot');
+  const [editIgn, setEditIgn] = useState('');
+  const [isSavingActivity, setIsSavingActivity] = useState(false);
+  const [isDeletingActivity, setIsDeletingActivity] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
@@ -151,97 +222,181 @@ export default function ProfileScreen({ navigation }: Props) {
     });
   };
 
-  useEffect(() => {
+  const loadProfile = useCallback(async () => {
     if (!user) {
       setProfileData(null);
       setActivities([]);
       return;
     }
 
-    const loadProfile = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name, email, credit_score, total_sessions_completed, show_up_rate')
-          .eq('id', user.id)
-          .maybeSingle();
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, email, credit_score, total_sessions_completed, show_up_rate')
+        .eq('id', user.id)
+        .maybeSingle();
 
-        if (error) {
-          console.warn('[ProfileScreen] Fetch profile error:', error.message);
-        }
-
-        const resolvedName =
-          data?.full_name ||
-          user.user_metadata?.full_name ||
-          user.email?.split('@')[0] ||
-          'Jeremy Marvel';
-
-        setProfileData({
-          fullName: resolvedName,
-          email: data?.email || user.email || '',
-          creditScore: data?.credit_score ?? 100,
-          totalSessions: data?.total_sessions_completed ?? 12,
-          showUpRate: `${data?.show_up_rate ?? 100}%`
-        });
-
-        const { data: actData } = await supabase
-          .from('user_activity_profiles')
-          .select('activity_type, preferred_role, skill_rating_level, skill_rating_points')
-          .eq('user_id', user.id);
-
-        if (actData && actData.length > 0) {
-          setActivities(
-            actData.map((act) => {
-              const pts = act.skill_rating_points ?? 1200;
-              const convertedRating = (pts / 20).toFixed(1);
-              return {
-                type: act.activity_type.toUpperCase(),
-                level: act.skill_rating_level || 'Intermediate',
-                role: act.preferred_role || 'Pemain',
-                rating: convertedRating,
-                matches: 8
-              };
-            })
-          );
-        } else {
-          setActivities([]);
-        }
-
-        try {
-          const ovrRes = await api.getMyOvr();
-          if (ovrRes) {
-            setOvrProfile(ovrRes);
-          } else {
-            const completed = data?.total_sessions_completed ?? 0;
-            const exp = Math.min(100, Math.round(30 + Math.sqrt(completed) * 15.65));
-            setOvrProfile({
-              ovr: 75,
-              grade: 'B',
-              is_calibrated: completed >= 3,
-              matches_played: completed,
-              total_reviews: 0,
-              radar: [
-                { key: 'teamwork', label: 'TMW', name: 'Teamwork', value: 75 },
-                { key: 'fair_play', label: 'FRP', name: 'Fair Play', value: 80 },
-                { key: 'reliability', label: 'REL', name: 'Reliability', value: data?.credit_score ?? 100 },
-                { key: 'experience', label: 'EXP', name: 'Experience', value: exp },
-                { key: 'skill_fit', label: 'SKL', name: 'Skill Fit', value: 75 }
-              ]
-            });
-          }
-        } catch (ovrErr) {
-          console.warn('[ProfileScreen] Fetch OVR error:', ovrErr);
-        }
-      } catch (err) {
-        console.warn('[ProfileScreen] Unexpected error:', err);
-      } finally {
-        setLoading(false);
+      if (error) {
+        console.warn('[ProfileScreen] Fetch profile error:', error.message);
       }
-    };
 
-    loadProfile();
+      const resolvedName =
+        data?.full_name ||
+        user.user_metadata?.full_name ||
+        user.email?.split('@')[0] ||
+        'Pemain Mabar';
+
+      setProfileData({
+        fullName: resolvedName,
+        email: data?.email || user.email || '',
+        creditScore: data?.credit_score ?? 100,
+        totalSessions: data?.total_sessions_completed ?? 0,
+        showUpRate: `${data?.show_up_rate ?? 100}%`
+      });
+
+      const { data: actData } = await supabase
+        .from('user_activity_profiles')
+        .select('activity_type, in_game_name, preferred_role, skill_rating_level, skill_rating_points')
+        .eq('user_id', user.id);
+
+      if (actData && actData.length > 0) {
+        setActivities(
+          actData.map((act) => {
+            const pts = act.skill_rating_points ?? 1200;
+            const convertedRating = (pts / 20).toFixed(1);
+            const rawType = (act.activity_type || 'futsal').toLowerCase();
+            return {
+              type: rawType.toUpperCase(),
+              rawType,
+              level: (act.skill_rating_level as ActivityItem['level']) || 'Intermediate',
+              role: act.preferred_role || 'Pemain',
+              rating: convertedRating,
+              inGameName: act.in_game_name || null
+            };
+          })
+        );
+      } else {
+        setActivities([]);
+      }
+
+      try {
+        const ovrRes = await api.getMyOvr();
+        if (ovrRes) {
+          setOvrProfile(ovrRes);
+        } else {
+          const completed = data?.total_sessions_completed ?? 0;
+          const exp = Math.min(100, Math.round(30 + Math.sqrt(completed) * 15.65));
+          setOvrProfile({
+            ovr: 75,
+            grade: 'B',
+            is_calibrated: completed >= 3,
+            matches_played: completed,
+            total_reviews: 0,
+            radar: [
+              { key: 'teamwork', label: 'TMW', name: 'Teamwork', value: 75 },
+              { key: 'fair_play', label: 'FRP', name: 'Fair Play', value: 80 },
+              { key: 'reliability', label: 'REL', name: 'Reliability', value: data?.credit_score ?? 100 },
+              { key: 'experience', label: 'EXP', name: 'Experience', value: exp },
+              { key: 'skill_fit', label: 'SKL', name: 'Skill Fit', value: 75 }
+            ]
+          });
+        }
+      } catch (ovrErr) {
+        console.warn('[ProfileScreen] Fetch OVR error:', ovrErr);
+      }
+    } catch (err) {
+      console.warn('[ProfileScreen] Unexpected error:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const handleOpenCreditHistory = async (initialTab: 'credit' | 'reviews' = 'credit') => {
+    setHistoryTab(initialTab);
+    setIsHistoryOpen(true);
+    setIsLoadingHistory(true);
+    try {
+      const [txRes, revRes] = await Promise.allSettled([
+        api.getCreditHistory(),
+        api.getMyReviews()
+      ]);
+
+      if (txRes.status === 'fulfilled') {
+        setCreditHistory(txRes.value);
+      } else if (user?.id) {
+        const { data } = await supabase
+          .from('credit_transactions')
+          .select('id, user_id, session_id, delta, reason, balance_after, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        setCreditHistory((data as ApiCreditTransaction[]) || []);
+      }
+
+      if (revRes.status === 'fulfilled') {
+        setAnonymousReviews(revRes.value);
+      } else {
+        setAnonymousReviews([]);
+      }
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleOpenActivityEditor = (existing?: ActivityItem) => {
+    if (existing) {
+      const normalized = SPORT_OPTIONS.includes(existing.rawType as any)
+        ? (existing.rawType as (typeof SPORT_OPTIONS)[number])
+        : 'futsal';
+      setEditSport(normalized);
+      setEditLevel(existing.level);
+      setEditRole(existing.role);
+      setEditIgn(existing.inGameName || '');
+    } else {
+      setEditSport('futsal');
+      setEditLevel('Intermediate');
+      setEditRole(ROLE_PRESETS.futsal[0]);
+      setEditIgn('');
+    }
+    setIsActivitySheetOpen(true);
+  };
+
+  const handleSaveActivity = async () => {
+    setIsSavingActivity(true);
+    try {
+      await api.upsertActivityProfile({
+        activity_type: editSport,
+        preferred_role: editRole.trim() || ROLE_PRESETS[editSport][0],
+        skill_rating_level: editLevel,
+        in_game_name: editSport === 'mlbb' && editIgn.trim() ? editIgn.trim() : null
+      });
+      setIsActivitySheetOpen(false);
+      await loadProfile();
+    } catch (err: any) {
+      showAlert('Gagal Menyimpan', err?.message || 'Coba ulangi beberapa saat lagi.', 'error');
+    } finally {
+      setIsSavingActivity(false);
+    }
+  };
+
+  const isEditingSavedSport = activities.some((a) => a.rawType === editSport);
+
+  const handleDeleteActivity = async () => {
+    setIsDeletingActivity(true);
+    try {
+      await api.deleteActivityProfile(editSport);
+      setIsActivitySheetOpen(false);
+      await loadProfile();
+    } catch (err: any) {
+      showAlert('Gagal Menghapus', err?.message || 'Coba ulangi beberapa saat lagi.', 'error');
+    } finally {
+      setIsDeletingActivity(false);
+    }
+  };
 
   const handleSignOut = () => {
     showAlert(
@@ -326,7 +481,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const name = profileData?.fullName || user.user_metadata?.full_name || 'Jeremy Marvel';
   const creditScore = profileData?.creditScore ?? 100;
-  const totalSessions = profileData?.totalSessions ?? 12;
+  const totalSessions = profileData?.totalSessions ?? 0;
   const showUpRate = profileData?.showUpRate ?? '100%';
   const creditStatusText = creditScore >= 70 ? 'Aman' : 'Kena Jeda';
 
@@ -480,19 +635,13 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.creditMetaRow}>
-            <Text style={styles.creditRuleText}>Skor di bawah 70 kena jeda 24 jam</Text>
+            <Text style={styles.creditRuleText}>Skor &lt; 70 · Jeda main 24 jam</Text>
             <TouchableOpacity
               activeOpacity={0.75}
               style={styles.historyLinkBtn}
-              onPress={() =>
-                showAlert(
-                  'Riwayat Credit Score',
-                  `Credit Score kamu saat ini ${creditScore} / 100 tanpa laporan ghosting.`,
-                  'success'
-                )
-              }
+              onPress={() => handleOpenCreditHistory('credit')}
             >
-              <Text style={styles.historyLinkText}>Riwayat</Text>
+              <Text style={styles.historyLinkText}>Riwayat &amp; Ulasan</Text>
               <ChevronRightIcon color={THEME.colors.primary} size={13} />
             </TouchableOpacity>
           </View>
@@ -505,32 +654,54 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* Section: Rating per Cabang */}
         <View style={styles.sectionHeadClean}>
           <Text style={styles.sectionHeading}>Rating per Cabang</Text>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={styles.addActivityBtn}
+            onPress={() => handleOpenActivityEditor()}
+          >
+            <Text style={styles.addActivityBtnText}>+ Atur</Text>
+          </TouchableOpacity>
         </View>
 
         {loading ? (
           <ActivityIndicator color={THEME.colors.primary} style={{ marginVertical: 16 }} />
         ) : activities.length === 0 ? (
           <View style={styles.emptySkillCard}>
-            <Text style={styles.emptySkillTitle}>Belum ada rating</Text>
+            <Text style={styles.emptySkillTitle}>Belum ada cabor terdaftar</Text>
             <Text style={styles.emptySkillSubtitle}>
-              Selesaikan 1 sesi dulu agar teman satu tim bisa kasih rating.
+              Tambahkan cabang olahraga &amp; role favoritmu untuk matchmaking yang lebih pas.
             </Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.emptySkillBtn}
+              onPress={() => handleOpenActivityEditor()}
+            >
+              <Text style={styles.emptySkillBtnText}>+ Tambah Cabor</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.skillStack}>
             {activities.map((act) => (
-              <View key={act.type} style={styles.skillRowCard}>
+              <TouchableOpacity
+                key={act.type}
+                style={styles.skillRowCard}
+                activeOpacity={0.82}
+                onPress={() => handleOpenActivityEditor(act)}
+              >
                 <SportWatermark activityType={act.type} />
                 <View style={styles.skillInfo}>
                   <Text style={styles.skillSportName}>
                     {act.type} · {act.level}
                   </Text>
                   <Text style={styles.skillSportSub}>
-                    {act.role} · {act.matches} Main
+                    {act.role}{act.inGameName ? ` · ${act.inGameName}` : ''}
                   </Text>
                 </View>
-                <Text style={styles.skillRatingUnboxed}>{act.rating}</Text>
-              </View>
+                <View style={styles.skillRatingCol}>
+                  <Text style={styles.skillRatingUnboxed}>{act.rating}</Text>
+                  <Text style={styles.skillRatingLabel}>SKILL</Text>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -555,6 +726,280 @@ export default function ProfileScreen({ navigation }: Props) {
           onClose={() => setModalConfig((prev) => ({ ...prev, visible: false }))}
         />
       </ScrollView>
+
+      {/* Credit History Bottom Sheet */}
+      <Modal
+        visible={isHistoryOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsHistoryOpen(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setIsHistoryOpen(false)}>
+          <Pressable
+            style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Riwayat &amp; Ulasan</Text>
+                <Text style={styles.sheetSub}>Skor saat ini: {creditScore} / 100</Text>
+              </View>
+              <TouchableOpacity style={styles.sheetCloseBtn} onPress={() => setIsHistoryOpen(false)}>
+                <CloseIcon color={THEME.colors.text} size={15} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetTabRow}>
+              <TouchableOpacity
+                style={[styles.sheetTabBtn, historyTab === 'credit' && styles.sheetTabBtnActive]}
+                onPress={() => setHistoryTab('credit')}
+              >
+                <Text
+                  style={[
+                    styles.sheetTabText,
+                    historyTab === 'credit' && styles.sheetTabTextActive
+                  ]}
+                >
+                  Skor
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sheetTabBtn, historyTab === 'reviews' && styles.sheetTabBtnActive]}
+                onPress={() => setHistoryTab('reviews')}
+              >
+                <Text
+                  style={[
+                    styles.sheetTabText,
+                    historyTab === 'reviews' && styles.sheetTabTextActive
+                  ]}
+                >
+                  Ulasan ({anonymousReviews.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {isLoadingHistory ? (
+              <ActivityIndicator color={THEME.colors.primary} style={{ marginVertical: 28 }} />
+            ) : historyTab === 'credit' ? (
+              creditHistory.length === 0 ? (
+                <View style={styles.sheetEmpty}>
+                  <Text style={styles.sheetEmptyText}>
+                    Belum ada perubahan skor. Skor awal 100 masih utuh.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+                  {creditHistory.map((tx) => {
+                    const isPositive = tx.delta >= 0;
+                    return (
+                      <View key={tx.id} style={styles.txRow}>
+                        <View style={styles.txLeft}>
+                          <Text style={styles.txReason}>{formatCreditReason(tx.reason)}</Text>
+                          <Text style={styles.txMeta}>
+                            {formatTxDate(tx.created_at)}
+                            {tx.balance_after !== null ? ` · Saldo ${tx.balance_after}` : ''}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.txDeltaPill,
+                            isPositive ? styles.txDeltaPos : styles.txDeltaNeg
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.txDeltaText,
+                              { color: isPositive ? THEME.colors.success : THEME.colors.danger }
+                            ]}
+                          >
+                            {isPositive ? `+${tx.delta}` : tx.delta}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              )
+            ) : anonymousReviews.length === 0 ? (
+              <View style={styles.sheetEmpty}>
+                <Text style={styles.sheetEmptyText}>
+                  Belum ada ulasan masuk dari teman mabar.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+                {anonymousReviews.map((rev) => {
+                  const sportLabel =
+                    rev.sportsmanship === 'good'
+                      ? 'Asik'
+                      : rev.sportsmanship === 'okay'
+                      ? 'Standar'
+                      : 'Kurang';
+                  const sportColor =
+                    rev.sportsmanship === 'good'
+                      ? THEME.colors.success
+                      : rev.sportsmanship === 'poor'
+                      ? THEME.colors.danger
+                      : THEME.colors.textSecondary;
+                  const levelLabel =
+                    rev.level_fit === 'higher'
+                      ? 'Level di atas'
+                      : rev.level_fit === 'lower'
+                      ? 'Level di bawah'
+                      : 'Level pas';
+                  return (
+                    <View key={rev.id} style={styles.reviewCard}>
+                      <View style={styles.reviewHeader}>
+                        <Text style={[styles.reviewBadge, { color: sportColor }]}>
+                          {sportLabel} · {levelLabel}
+                        </Text>
+                        <Text style={styles.txMeta}>{formatTxDate(rev.created_at)}</Text>
+                      </View>
+                      {rev.notes ? (
+                        <Text style={styles.reviewNotes}>&ldquo;{rev.notes}&rdquo;</Text>
+                      ) : (
+                        <Text style={styles.reviewNoNotes}>Tanpa catatan</Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Activity Profile Editor Bottom Sheet */}
+      <Modal
+        visible={isActivitySheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsActivitySheetOpen(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setIsActivitySheetOpen(false)}>
+          <Pressable
+            style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Atur Cabor &amp; Role</Text>
+              <TouchableOpacity
+                style={styles.sheetCloseBtn}
+                onPress={() => setIsActivitySheetOpen(false)}
+              >
+                <CloseIcon color={THEME.colors.text} size={15} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sheetLabel}>CABANG OLAHRAGA</Text>
+            <View style={styles.sheetPillRow}>
+              {SPORT_OPTIONS.map((sp) => {
+                const active = editSport === sp;
+                return (
+                  <TouchableOpacity
+                    key={sp}
+                    style={[styles.sheetChip, active && styles.sheetChipActive]}
+                    onPress={() => {
+                      setEditSport(sp);
+                      setEditRole(ROLE_PRESETS[sp][0]);
+                    }}
+                  >
+                    <Text style={[styles.sheetChipText, active && styles.sheetChipTextActive]}>
+                      {sp.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.sheetLabel}>LEVEL MAIN</Text>
+            <View style={styles.sheetPillRow}>
+              {LEVEL_OPTIONS.map((lvl) => {
+                const active = editLevel === lvl;
+                return (
+                  <TouchableOpacity
+                    key={lvl}
+                    style={[styles.sheetChip, active && styles.sheetChipActive]}
+                    onPress={() => setEditLevel(lvl)}
+                  >
+                    <Text style={[styles.sheetChipText, active && styles.sheetChipTextActive]}>
+                      {lvl}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.sheetLabel}>POSISI / ROLE FAVORIT</Text>
+            <View style={styles.sheetPillWrap}>
+              {ROLE_PRESETS[editSport].map((r) => {
+                const active = editRole === r;
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.sheetChipSmall, active && styles.sheetChipActive]}
+                    onPress={() => setEditRole(r)}
+                  >
+                    <Text style={[styles.sheetChipText, active && styles.sheetChipTextActive]}>
+                      {r}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TextInput
+              style={styles.sheetInput}
+              value={editRole}
+              onChangeText={setEditRole}
+              placeholder="Atau ketik posisi sendiri..."
+              placeholderTextColor={THEME.colors.textMuted}
+            />
+
+            {editSport === 'mlbb' && (
+              <>
+                <Text style={styles.sheetLabel}>NICKNAME IN-GAME (OPSIONAL)</Text>
+                <TextInput
+                  style={styles.sheetInput}
+                  value={editIgn}
+                  onChangeText={setEditIgn}
+                  placeholder="Contoh: Voskav#1234"
+                  placeholderTextColor={THEME.colors.textMuted}
+                />
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[styles.sheetSaveBtn, (isSavingActivity || isDeletingActivity) && { opacity: 0.6 }]}
+              activeOpacity={0.85}
+              disabled={isSavingActivity || isDeletingActivity}
+              onPress={handleSaveActivity}
+            >
+              {isSavingActivity ? (
+                <ActivityIndicator color={THEME.colors.textOnPrimary} />
+              ) : (
+                <Text style={styles.sheetSaveBtnText}>Simpan Profil Cabor</Text>
+              )}
+            </TouchableOpacity>
+
+            {isEditingSavedSport && (
+              <TouchableOpacity
+                style={[styles.sheetDeleteBtn, (isSavingActivity || isDeletingActivity) && { opacity: 0.6 }]}
+                activeOpacity={0.85}
+                disabled={isSavingActivity || isDeletingActivity}
+                onPress={handleDeleteActivity}
+              >
+                {isDeletingActivity ? (
+                  <ActivityIndicator color={THEME.colors.danger} />
+                ) : (
+                  <Text style={styles.sheetDeleteBtnText}>Hapus {editSport.toUpperCase()}</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -738,6 +1183,9 @@ const styles = StyleSheet.create({
 
   // Clean Bold Section Headers (No dots, no right-side filler)
   sectionHeadClean: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 24,
     marginBottom: 12
   },
@@ -885,12 +1333,23 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMuted,
     includeFontPadding: false
   },
+  skillRatingCol: {
+    alignItems: 'flex-end',
+    gap: 1
+  },
   skillRatingUnboxed: {
     fontFamily: THEME.typography.fonts.extraBold,
     fontSize: 20,
     color: THEME.colors.text,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.4,
+    includeFontPadding: false
+  },
+  skillRatingLabel: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 9,
+    color: THEME.colors.textMuted,
+    letterSpacing: 0.8,
     includeFontPadding: false
   },
   emptySkillCard: {
@@ -973,6 +1432,291 @@ const styles = StyleSheet.create({
     fontFamily: THEME.typography.fonts.extraBold,
     color: THEME.colors.textOnPrimary,
     fontSize: 14,
+    includeFontPadding: false
+  },
+  addActivityBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: THEME.radius.full,
+    backgroundColor: THEME.colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: THEME.colors.primaryBorder
+  },
+  addActivityBtnText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 11,
+    color: THEME.colors.primary,
+    includeFontPadding: false
+  },
+  emptySkillBtn: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: THEME.radius.full,
+    backgroundColor: THEME.colors.primary
+  },
+  emptySkillBtnText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 12,
+    color: THEME.colors.textOnPrimary,
+    includeFontPadding: false
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: THEME.colors.overlay,
+    justifyContent: 'flex-end'
+  },
+  sheetContainer: {
+    backgroundColor: THEME.colors.card,
+    borderTopLeftRadius: THEME.radius.xl,
+    borderTopRightRadius: THEME.radius.xl,
+    borderTopWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    maxHeight: '82%'
+  },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: THEME.colors.borderStrong,
+    alignSelf: 'center',
+    marginBottom: 12
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14
+  },
+  sheetTitle: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 16,
+    color: THEME.colors.text,
+    includeFontPadding: false
+  },
+  sheetSub: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
+    includeFontPadding: false
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: THEME.colors.cardElevated,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sheetEmpty: {
+    paddingVertical: 28,
+    alignItems: 'center'
+  },
+  sheetEmptyText: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18
+  },
+  sheetList: {
+    maxHeight: 360
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border,
+    gap: 12
+  },
+  txLeft: {
+    flex: 1,
+    gap: 3
+  },
+  txReason: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 13,
+    color: THEME.colors.text,
+    includeFontPadding: false
+  },
+  txMeta: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    includeFontPadding: false
+  },
+  txDeltaPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: THEME.radius.sm,
+    borderWidth: 1
+  },
+  txDeltaPos: {
+    backgroundColor: THEME.colors.successSoft,
+    borderColor: THEME.colors.successBorder
+  },
+  txDeltaNeg: {
+    backgroundColor: THEME.colors.dangerSoft,
+    borderColor: THEME.colors.dangerBorder
+  },
+  txDeltaText: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false
+  },
+  sheetLabel: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 10,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 6,
+    includeFontPadding: false
+  },
+  sheetPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10
+  },
+  sheetPillWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10
+  },
+  sheetChip: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.cardElevated,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    alignItems: 'center'
+  },
+  sheetChipSmall: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.cardElevated,
+    borderWidth: 1,
+    borderColor: THEME.colors.border
+  },
+  sheetChipActive: {
+    backgroundColor: THEME.colors.primaryMuted,
+    borderColor: THEME.colors.primary
+  },
+  sheetChipText: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    includeFontPadding: false
+  },
+  sheetChipTextActive: {
+    color: THEME.colors.primary,
+    fontFamily: THEME.typography.fonts.bold
+  },
+  sheetInput: {
+    backgroundColor: THEME.colors.cardElevated,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    paddingHorizontal: 14,
+    height: 44,
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 13,
+    color: THEME.colors.text,
+    marginBottom: 10
+  },
+  sheetSaveBtn: {
+    marginTop: 6,
+    height: 48,
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sheetSaveBtnText: {
+    fontFamily: THEME.typography.fonts.extraBold,
+    fontSize: 14,
+    color: THEME.colors.textOnPrimary,
+    includeFontPadding: false
+  },
+  sheetDeleteBtn: {
+    marginTop: 8,
+    height: 44,
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.dangerFill,
+    borderWidth: 1,
+    borderColor: THEME.colors.dangerBorder,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sheetDeleteBtnText: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 13,
+    color: THEME.colors.danger,
+    includeFontPadding: false
+  },
+  sheetTabRow: {
+    flexDirection: 'row',
+    backgroundColor: THEME.colors.cardElevated,
+    borderRadius: THEME.radius.md,
+    padding: 4,
+    gap: 4,
+    marginBottom: 12
+  },
+  sheetTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: THEME.radius.sm,
+    alignItems: 'center'
+  },
+  sheetTabBtnActive: {
+    backgroundColor: THEME.colors.primaryMuted
+  },
+  sheetTabText: {
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    includeFontPadding: false
+  },
+  sheetTabTextActive: {
+    color: THEME.colors.primary,
+    fontFamily: THEME.typography.fonts.bold
+  },
+  reviewCard: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border,
+    gap: 5
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  reviewBadge: {
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 12,
+    includeFontPadding: false
+  },
+  reviewNotes: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 13,
+    color: THEME.colors.text,
+    lineHeight: 19,
+    includeFontPadding: false
+  },
+  reviewNoNotes: {
+    fontFamily: THEME.typography.fonts.regular,
+    fontSize: 12,
+    color: THEME.colors.textMuted,
     includeFontPadding: false
   }
 });
