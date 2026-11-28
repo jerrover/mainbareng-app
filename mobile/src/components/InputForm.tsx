@@ -159,12 +159,18 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top'
   },
   leftIcon: {
-    fontSize: 14,
-    marginRight: 8
+    fontFamily: THEME.typography.fonts.bold,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    marginRight: 8,
+    includeFontPadding: false
   },
   rightIcon: {
-    fontSize: 14,
-    marginLeft: 8
+    fontFamily: THEME.typography.fonts.semiBold,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    marginLeft: 8,
+    includeFontPadding: false
   },
   helperText: {
     ...THEME.typography.caption,

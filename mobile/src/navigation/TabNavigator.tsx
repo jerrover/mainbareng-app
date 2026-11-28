@@ -89,6 +89,7 @@ export default function TabNavigator() {
         component={CreateSessionScreen}
         options={{
           tabBarLabel: () => null,
+          tabBarStyle: { display: 'none' },
           tabBarButton: (props) => <CenterActionButton {...props} />
         }}
       />
